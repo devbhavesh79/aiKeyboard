@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LangFlow AI Keyboard</string>
+    <string name="ime_name">LangFlow Multilingual Keyboard</string>
+    <string name="action_translate">Translate</string>
+    <string name="action_smart_reply">Smart Reply</string>
+    <string name="action_word_tone">Word Tone</string>
+    <string name="action_fix_grammar">Fix Grammar</string>
+    <string name="action_chatgpt">ChatGPT</string>
+    <string name="toast_secure_field">AI features are disabled in password and sensitive fields for your security.</string>
+    <string name="toast_no_text">Please select or type text first.</string>
+    <string name="toast_stale_dropped">App switched. Inactive request safely cancelled.</string>
+</resources>

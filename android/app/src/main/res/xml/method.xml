@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.langflow.keyboard.ui.MainActivity"
+    android:isDefault="false"
+    android:supportsSwitchingToNextInputMethod="true">
+
+    <subtype
+        android:label="Hinglish (LangFlow)"
+        android:imeSubtypeLocale="en_IN"
+        android:imeSubtypeMode="keyboard"
+        android:imeSubtypeExtraValue="KeyboardLayoutSet=hinglish,AsciiCapable" />
+
+    <subtype
+        android:label="English (LangFlow)"
+        android:imeSubtypeLocale="en_US"
+        android:imeSubtypeMode="keyboard"
+        android:imeSubtypeExtraValue="KeyboardLayoutSet=qwerty,AsciiCapable" />
+
+    <subtype
+        android:label="Hindi (LangFlow)"
+        android:imeSubtypeLocale="hi_IN"
+        android:imeSubtypeMode="keyboard"
+        android:imeSubtypeExtraValue="KeyboardLayoutSet=hindi" />
+
+    <subtype
+        android:label="Gujarati (LangFlow)"
+        android:imeSubtypeLocale="gu_IN"
+        android:imeSubtypeMode="keyboard"
+        android:imeSubtypeExtraValue="KeyboardLayoutSet=gujarati" />
+
+</input-method>

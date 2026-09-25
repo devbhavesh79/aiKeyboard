@@ -1,0 +1,6 @@
+{
+  "name": "LangFlow AI Keyboard",
+  "description": "Real, production-grade system communication keyboard platform with real-time translation, AI reply assistant, tone rewriter, and multilingual communication.",
+  "requestFramePermissions": ["clipboard-read", "clipboard-write"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
