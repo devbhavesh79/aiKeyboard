@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch: # Manual button trigger enable karta hai
+  workflow_dispatch: # Manual trigger button
 
 jobs:
   build-apk:
@@ -21,10 +21,10 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -39,9 +39,9 @@ jobs:
         working-directory: android
         run: gradle assembleDebug --no-daemon --stacktrace
 
-      - name: Verify APK Output
+      - name: List Generated APK
         run: |
-          echo "Listing generated APKs:"
+          echo "Generated APK Files:"
           ls -la android/app/build/outputs/apk/debug/
 
       - name: Upload APK Artifact
