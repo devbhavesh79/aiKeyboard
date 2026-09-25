@@ -60,7 +60,43 @@ class DictionaryGlossaryManager {
         val entityMap = mutableMapOf<String, String>()
         var counter = 0
 
-        // 1. Mask User Dictionary Words (longest first to avoid substring collision)
+        // 1. Mask URLs (Must run first to prevent domain sub-words from matching dictionary terms)
+        val urlMatcher = URL_REGEX.matcher(workingText)
+        val urlSb = StringBuffer()
+        while (urlMatcher.find()) {
+            val matched = urlMatcher.group()
+            val placeholder = "__PROTECTED_ENTITY_${counter++}__"
+            entityMap[placeholder] = matched
+            urlMatcher.appendReplacement(urlSb, placeholder)
+        }
+        urlMatcher.appendTail(urlSb)
+        workingText = urlSb.toString()
+
+        // 2. Mask Emails (Must run before dictionary to protect email addresses)
+        val emailMatcher = EMAIL_REGEX.matcher(workingText)
+        val emailSb = StringBuffer()
+        while (emailMatcher.find()) {
+            val matched = emailMatcher.group()
+            val placeholder = "__PROTECTED_ENTITY_${counter++}__"
+            entityMap[placeholder] = matched
+            emailMatcher.appendReplacement(emailSb, placeholder)
+        }
+        emailMatcher.appendTail(emailSb)
+        workingText = emailSb.toString()
+
+        // 3. Mask Handles (@username)
+        val handleMatcher = HANDLE_REGEX.matcher(workingText)
+        val handleSb = StringBuffer()
+        while (handleMatcher.find()) {
+            val matched = handleMatcher.group()
+            val placeholder = "__PROTECTED_ENTITY_${counter++}__"
+            entityMap[placeholder] = matched
+            handleMatcher.appendReplacement(handleSb, placeholder)
+        }
+        handleMatcher.appendTail(handleSb)
+        workingText = handleSb.toString()
+
+        // 4. Mask User Dictionary Words (longest first to avoid substring collision)
         val sortedDictWords = userDictionary.sortedByDescending { it.length }
         for (word in sortedDictWords) {
             val pattern = Pattern.compile("\\b" + Pattern.quote(word) + "\\b", Pattern.CASE_INSENSITIVE)
@@ -75,42 +111,6 @@ class DictionaryGlossaryManager {
             matcher.appendTail(sb)
             workingText = sb.toString()
         }
-
-        // 2. Mask URLs
-        val urlMatcher = URL_REGEX.matcher(workingText)
-        val urlSb = StringBuffer()
-        while (urlMatcher.find()) {
-            val matched = urlMatcher.group()
-            val placeholder = "__PROTECTED_ENTITY_${counter++}__"
-            entityMap[placeholder] = matched
-            urlMatcher.appendReplacement(urlSb, placeholder)
-        }
-        urlMatcher.appendTail(urlSb)
-        workingText = urlSb.toString()
-
-        // 3. Mask Emails
-        val emailMatcher = EMAIL_REGEX.matcher(workingText)
-        val emailSb = StringBuffer()
-        while (emailMatcher.find()) {
-            val matched = emailMatcher.group()
-            val placeholder = "__PROTECTED_ENTITY_${counter++}__"
-            entityMap[placeholder] = matched
-            emailMatcher.appendReplacement(emailSb, placeholder)
-        }
-        emailMatcher.appendTail(emailSb)
-        workingText = emailSb.toString()
-
-        // 4. Mask Handles (@username)
-        val handleMatcher = HANDLE_REGEX.matcher(workingText)
-        val handleSb = StringBuffer()
-        while (handleMatcher.find()) {
-            val matched = handleMatcher.group()
-            val placeholder = "__PROTECTED_ENTITY_${counter++}__"
-            entityMap[placeholder] = matched
-            handleMatcher.appendReplacement(handleSb, placeholder)
-        }
-        handleMatcher.appendTail(handleSb)
-        workingText = handleSb.toString()
 
         return MaskedResult(workingText, entityMap)
     }
