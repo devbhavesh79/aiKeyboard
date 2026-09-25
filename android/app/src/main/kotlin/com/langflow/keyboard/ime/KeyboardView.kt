@@ -12,6 +12,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.AttributeSet
 import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -209,7 +210,7 @@ class KeyboardView @JvmOverloads constructor(
                 gravity = Gravity.CENTER
                 setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6))
                 val params = LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpToPx(30)).apply {
-                    marginEnd = dpToPx(6)
+                    rightMargin = dpToPx(6)
                 }
                 layoutParams = params
 
@@ -306,7 +307,7 @@ class KeyboardView @JvmOverloads constructor(
                 gravity = Gravity.CENTER
                 setPadding(dpToPx(14), dpToPx(6), dpToPx(14), dpToPx(6))
                 val params = LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpToPx(34)).apply {
-                    marginEnd = dpToPx(6)
+                    rightMargin = dpToPx(6)
                 }
                 layoutParams = params
 
@@ -331,7 +332,7 @@ class KeyboardView @JvmOverloads constructor(
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6))
                 val params = LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpToPx(34)).apply {
-                    marginEnd = dpToPx(8)
+                    rightMargin = dpToPx(8)
                 }
                 layoutParams = params
 
@@ -355,7 +356,7 @@ class KeyboardView @JvmOverloads constructor(
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6))
             val params = LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dpToPx(34)).apply {
-                marginEnd = dpToPx(8)
+                rightMargin = dpToPx(8)
             }
             layoutParams = params
 
@@ -443,7 +444,8 @@ class KeyboardView @JvmOverloads constructor(
                 setBackgroundResource(R.drawable.key_background)
                 isAllCaps = false
                 val params = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
-                    marginHorizontal = dpToPx(2)
+                    leftMargin = dpToPx(2)
+                    rightMargin = dpToPx(2)
                 }
                 layoutParams = params
 
@@ -481,7 +483,8 @@ class KeyboardView @JvmOverloads constructor(
             setColorFilter(iconColor)
             setBackgroundResource(R.drawable.key_background)
             val params = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.4f).apply {
-                marginHorizontal = dpToPx(2)
+                leftMargin = dpToPx(2)
+                rightMargin = dpToPx(2)
             }
             layoutParams = params
 
@@ -518,7 +521,8 @@ class KeyboardView @JvmOverloads constructor(
                 setBackgroundResource(R.drawable.key_background)
                 isAllCaps = false
                 val params = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f).apply {
-                    marginHorizontal = dpToPx(2)
+                    leftMargin = dpToPx(2)
+                    rightMargin = dpToPx(2)
                 }
                 layoutParams = params
 
@@ -540,7 +544,8 @@ class KeyboardView @JvmOverloads constructor(
             setColorFilter(Color.WHITE)
             setBackgroundResource(R.drawable.key_background)
             val params = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.4f).apply {
-                marginHorizontal = dpToPx(2)
+                leftMargin = dpToPx(2)
+                rightMargin = dpToPx(2)
             }
             layoutParams = params
 
@@ -584,7 +589,8 @@ class KeyboardView @JvmOverloads constructor(
             setBackgroundResource(R.drawable.key_background)
             isAllCaps = false
             val params = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.3f).apply {
-                marginHorizontal = dpToPx(2)
+                leftMargin = dpToPx(2)
+                rightMargin = dpToPx(2)
             }
             layoutParams = params
 
@@ -603,7 +609,8 @@ class KeyboardView @JvmOverloads constructor(
             setTextColor(ContextCompat.getColor(context, R.color.keyboard_text_primary))
             setBackgroundResource(R.drawable.key_background)
             val params = LayoutParams(0, LayoutParams.MATCH_PARENT, 0.9f).apply {
-                marginHorizontal = dpToPx(2)
+                leftMargin = dpToPx(2)
+                rightMargin = dpToPx(2)
             }
             layoutParams = params
 
@@ -622,7 +629,8 @@ class KeyboardView @JvmOverloads constructor(
             setBackgroundResource(R.drawable.key_background)
             isAllCaps = false
             val params = LayoutParams(0, LayoutParams.MATCH_PARENT, 4.2f).apply {
-                marginHorizontal = dpToPx(2)
+                leftMargin = dpToPx(2)
+                rightMargin = dpToPx(2)
             }
             layoutParams = params
 
@@ -640,7 +648,8 @@ class KeyboardView @JvmOverloads constructor(
             setTextColor(ContextCompat.getColor(context, R.color.keyboard_text_primary))
             setBackgroundResource(R.drawable.key_background)
             val params = LayoutParams(0, LayoutParams.MATCH_PARENT, 0.9f).apply {
-                marginHorizontal = dpToPx(2)
+                leftMargin = dpToPx(2)
+                rightMargin = dpToPx(2)
             }
             layoutParams = params
 
@@ -657,7 +666,8 @@ class KeyboardView @JvmOverloads constructor(
             setColorFilter(Color.WHITE)
             setBackgroundResource(R.drawable.action_key_background)
             val params = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.5f).apply {
-                marginHorizontal = dpToPx(2)
+                leftMargin = dpToPx(2)
+                rightMargin = dpToPx(2)
             }
             layoutParams = params
 

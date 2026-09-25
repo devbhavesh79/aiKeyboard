@@ -98,6 +98,7 @@ data class GrammarResult(
     val originalText: String,
     val correctedText: String,
     val naturalPhrasing: String,
+    val explanation: String = "",
     val corrections: List<GrammarCorrectionItem> = emptyList()
 )
 
