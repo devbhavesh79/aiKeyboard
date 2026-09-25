@@ -168,16 +168,10 @@ export default function App() {
   const [replySuggestions, setReplySuggestions] = useState<Array<{ id: string; text: string; tone: string; lengthTag: string }> | null>(null);
   const [grammarDetails, setGrammarDetails] = useState<any | null>(null);
 
-  // Host Apps Chat States
-  const [whatsAppMessages, setWhatsAppMessages] = useState<ChatMessage[]>([
-    { id: 'm1', sender: 'other', text: 'Hey, are you joining the team meeting at 10 AM?', time: '10:02 AM' },
-    { id: 'm2', sender: 'me', text: "Yes, I'm reviewing the agenda right now.", time: '10:03 AM' },
-    { id: 'm3', sender: 'other', text: 'Can you please submit your application for the Social Media Manager position today?', time: '10:04 AM' }
-  ]);
-  const [slackMessages, setSlackMessages] = useState<ChatMessage[]>([
-    { id: 's1', sender: 'other', text: 'Can you send me the project report today by 4 PM?', time: '09:45 AM' },
-    { id: 's2', sender: 'other', text: 'Are you available tomorrow at 5 PM for the design sync?', time: '09:46 AM' }
-  ]);
+  // Host Apps & Database Chat States
+  const [currentConversationId, setCurrentConversationId] = useState<string>('');
+  const [dbChatMessages, setDbChatMessages] = useState<any[]>([]);
+  const [incomingSimText, setIncomingSimText] = useState('');
   const [gmailBody, setGmailBody] = useState('Hi Bhavesh,\nCould you please review the attached proposal and send your comments?');
 
   // Dictionary & Glossary State
@@ -316,6 +310,10 @@ export default function App() {
     fetchDictionaryAndGlossary();
     fetchTelemetry();
   }, []);
+
+  useEffect(() => {
+    fetchConversationsAndMessages(hostApp);
+  }, [hostApp]);
 
   // Save Default Language Preference
   const handleSetDefaultLanguage = (lang: SupportedLanguage) => {
@@ -608,17 +606,106 @@ export default function App() {
     setActiveNotice('Applied suggestion to active text field!');
   };
 
+  const fetchConversationsAndMessages = async (app: string) => {
+    try {
+      const res = await fetch('/api/v1/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appType: app })
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        const convId = data.data.id;
+        setCurrentConversationId(convId);
+        const msgRes = await fetch(`/api/v1/conversations/${convId}/messages`);
+        const msgData = await msgRes.json();
+        if (msgData.success) {
+          setDbChatMessages(msgData.data || []);
+        }
+      }
+    } catch {
+      // Fallback
+    }
+  };
+
   const fetchDictionaryAndGlossary = async () => {
     try {
       const dRes = await fetch('/api/v1/dictionary');
       const dData = await dRes.json();
-      if (dData.success) setUserDictionary(dData.data);
+      if (dData.success) setUserDictionary(dData.data || []);
 
       const gRes = await fetch('/api/v1/glossary');
       const gData = await gRes.json();
-      if (gData.success) setUserGlossary(gData.data);
+      if (gData.success) setUserGlossary(gData.data || []);
     } catch {
       // Fallback
+    }
+  };
+
+  const handleDeleteDictionary = async (id: string) => {
+    try {
+      await fetch(`/api/v1/dictionary/${id}`, { method: 'DELETE' });
+      fetchDictionaryAndGlossary();
+      setActiveNotice('Dictionary entry deleted from database.');
+    } catch {
+      setActiveNotice('Failed to delete dictionary entry.');
+    }
+  };
+
+  const handleDeleteGlossary = async (id: string) => {
+    try {
+      await fetch(`/api/v1/glossary/${id}`, { method: 'DELETE' });
+      fetchDictionaryAndGlossary();
+      setActiveNotice('Glossary entry deleted from database.');
+    } catch {
+      setActiveNotice('Failed to delete glossary entry.');
+    }
+  };
+
+  const handleClearAllData = async () => {
+    if (!window.confirm('Are you sure you want to purge all old data and reset the database?')) return;
+    try {
+      const res = await fetch('/api/v1/system/clear-data', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setUserDictionary([]);
+        setUserGlossary([]);
+        setDbChatMessages([]);
+        setTelemetryLogs([]);
+        setMetrics({ totalRequests: 0, averageLatencyMs: 0, successRate: 100 });
+        setInputText('');
+        setSelectedMessage(null);
+        setSelectedMsgTranslation(null);
+        setSelectedMsgReplies(null);
+        setActiveNotice('Database cleared successfully! All old records and test data purged.');
+        fetchConversationsAndMessages(hostApp);
+      }
+    } catch {
+      setActiveNotice('Failed to clear database.');
+    }
+  };
+
+  const handleAddIncomingMessage = async (customText?: string) => {
+    const textToAdd = (typeof customText === 'string' ? customText : incomingSimText).trim();
+    if (!textToAdd || !currentConversationId) return;
+
+    try {
+      const res = await fetch(`/api/v1/conversations/${currentConversationId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender: 'other',
+          text: textToAdd
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setDbChatMessages(prev => [...prev, data.data]);
+        setIncomingSimText('');
+        setActiveNotice('Incoming message added to database conversation!');
+      }
+    } catch {
+      setActiveNotice('Failed to save message.');
     }
   };
 
@@ -811,7 +898,7 @@ export default function App() {
       return;
     }
 
-    const contextMsg = customContext || (hostApp === 'whatsapp' ? whatsAppMessages[0].text : slackMessages[0].text);
+    const contextMsg = customContext || selectedMessage?.text || (dbChatMessages.length > 0 ? dbChatMessages[dbChatMessages.length - 1].text : '') || inputText;
 
     setIsGenerating(true);
     setLoadingStatus('Analyzing context & generating suggestions...');
@@ -996,7 +1083,7 @@ export default function App() {
 
     const hasTypedText = !!inputText.trim();
     const contextMsg = selectedMessage?.text || 
-      (hostApp === 'whatsapp' ? whatsAppMessages[whatsAppMessages.length - 1]?.text : slackMessages[slackMessages.length - 1]?.text) || 
+      (dbChatMessages.length > 0 ? dbChatMessages[dbChatMessages.length - 1]?.text : '') || 
       '';
 
     try {
@@ -1159,21 +1246,38 @@ export default function App() {
     setActiveNotice('Original text restored.');
   };
 
-  // Send message directly into host application
-  const handleSendToHost = (textToSend: string, isTranslated: boolean = false) => {
+  // Send message directly into host application & persist to database
+  const handleSendToHost = async (textToSend: string, isTranslated: boolean = false) => {
     if (!textToSend.trim()) return;
 
-    if (hostApp === 'whatsapp') {
-      setWhatsAppMessages(prev => [
+    if (currentConversationId) {
+      try {
+        const res = await fetch(`/api/v1/conversations/${currentConversationId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sender: 'me',
+            text: textToSend,
+            originalText: inputText !== textToSend ? inputText : undefined,
+            sourceLang: sourceLang,
+            targetLang: targetLang
+          })
+        });
+        const data = await res.json();
+        if (data.success && data.data) {
+          setDbChatMessages(prev => [...prev, data.data]);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    } else {
+      setDbChatMessages(prev => [
         ...prev,
-        { id: `m-${Date.now()}`, sender: 'me', text: textToSend, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+        { id: `m-${Date.now()}`, sender: 'me', text: textToSend, createdAt: new Date().toISOString() }
       ]);
-    } else if (hostApp === 'slack') {
-      setSlackMessages(prev => [
-        ...prev,
-        { id: `s-${Date.now()}`, sender: 'me', text: textToSend, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-      ]);
-    } else if (hostApp === 'gmail') {
+    }
+
+    if (hostApp === 'gmail') {
       setGmailBody(prev => prev + '\n' + textToSend);
     }
 
@@ -1425,6 +1529,15 @@ export default function App() {
               >
                 <Layers className="w-3.5 h-3.5" />
                 Specs
+              </button>
+
+              <button
+                onClick={handleClearAllData}
+                className="px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-[11px] font-semibold shadow"
+                title="Purge all old data and reset database to clean state"
+              >
+                <RotateCcw className="w-3 h-3 text-rose-400" />
+                Purge & Reset DB
               </button>
             </nav>
           </div>
@@ -1706,69 +1819,68 @@ export default function App() {
                     💡 Click/Tap any message to see its Translation & Smart Answers
                   </div>
 
-                  {hostApp === 'whatsapp' && (
+                  {hostApp !== 'gmail' && hostApp !== 'password_test' && (
                     <>
-                      {whatsAppMessages.map(msg => {
-                        const isSelected = selectedMessage?.id === msg.id;
-                        return (
-                          <div
-                            key={msg.id}
-                            onClick={() => handleSelectChatMessage(msg)}
-                            className={`max-w-[85%] p-3 rounded-2xl cursor-pointer transition relative group ${
-                              msg.sender === 'other'
-                                ? 'bg-slate-800/90 text-slate-200 self-start rounded-tl-sm'
-                                : 'bg-emerald-700 text-white self-end rounded-tr-sm shadow-md'
-                            } ${
-                              isSelected
-                                ? 'ring-2 ring-indigo-400 border border-indigo-400 shadow-lg shadow-indigo-500/20'
-                                : 'hover:ring-1 hover:ring-slate-500'
-                            }`}
-                          >
-                            {isSelected && (
-                              <span className="absolute -top-2 right-2 text-[9px] bg-indigo-600 text-white font-bold px-1.5 py-0.5 rounded-full shadow">
-                                Selected
-                              </span>
-                            )}
-                            <p className="leading-relaxed">{msg.text}</p>
-                            <div className="flex items-center justify-between mt-1 text-[9px] opacity-70">
-                              <span className="text-indigo-300 opacity-90 group-hover:underline">
-                                {isSelected ? '✓ Translating...' : 'Tap to Translate & Answer'}
-                              </span>
-                              <span>{msg.time}</span>
-                            </div>
+                      {dbChatMessages.length === 0 ? (
+                        <div className="text-center py-6 px-4 bg-slate-900/50 rounded-2xl border border-dashed border-slate-800 my-auto">
+                          <p className="text-slate-400 text-xs">Zero old records in database (Clean State).</p>
+                          <p className="text-slate-400 text-[11px] mt-1">Type below with AI KeyBoard to send messages or add an incoming query.</p>
+                          <div className="flex justify-center gap-2 mt-3">
+                            <button
+                              onClick={() => handleAddIncomingMessage("Hey, are you joining the team meeting at 10 AM?")}
+                              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] border border-slate-700 font-medium"
+                            >
+                              + Add English Incoming
+                            </button>
+                            <button
+                              onClick={() => handleAddIncomingMessage("क्या आप आज आवेदन जमा कर सकते हैं?")}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-300 text-[10px] border border-indigo-800 font-medium"
+                            >
+                              + Add Hindi Incoming
+                            </button>
                           </div>
-                        );
-                      })}
-                    </>
-                  )}
-
-                  {hostApp === 'slack' && (
-                    <>
-                      {slackMessages.map(msg => {
-                        const isSelected = selectedMessage?.id === msg.id;
-                        return (
-                          <div
-                            key={msg.id}
-                            onClick={() => handleSelectChatMessage(msg)}
-                            className={`max-w-[88%] p-3 rounded-xl cursor-pointer transition relative ${
-                              msg.sender === 'other'
-                                ? 'bg-slate-800/90 text-slate-200 self-start border border-slate-700/60'
-                                : 'bg-indigo-600 text-white self-end'
-                            } ${
-                              isSelected
-                                ? 'ring-2 ring-indigo-400 border-indigo-400 shadow-lg'
-                                : 'hover:border-indigo-400/50'
-                            }`}
-                          >
-                            <div className="font-semibold text-[10px] text-slate-400 mb-0.5 flex items-center justify-between">
-                              <span>{msg.sender === 'other' ? 'Sarah (Manager)' : 'You'}</span>
-                              {isSelected && <span className="text-[9px] text-indigo-400 font-bold">Selected</span>}
+                        </div>
+                      ) : (
+                        dbChatMessages.map(msg => {
+                          const isSelected = selectedMessage?.id === msg.id;
+                          const timeStr = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now';
+                          return (
+                            <div
+                              key={msg.id}
+                              onClick={() => handleSelectChatMessage(msg)}
+                              className={`max-w-[85%] p-3 rounded-2xl cursor-pointer transition relative group ${
+                                msg.sender === 'other'
+                                  ? 'bg-slate-800/90 text-slate-200 self-start rounded-tl-sm'
+                                  : hostApp === 'whatsapp'
+                                    ? 'bg-emerald-700 text-white self-end rounded-tr-sm shadow-md'
+                                    : 'bg-indigo-600 text-white self-end rounded-tr-sm shadow-md'
+                              } ${
+                                isSelected
+                                  ? 'ring-2 ring-indigo-400 border border-indigo-400 shadow-lg shadow-indigo-500/20'
+                                  : 'hover:ring-1 hover:ring-slate-500'
+                              }`}
+                            >
+                              {isSelected && (
+                                <span className="absolute -top-2 right-2 text-[9px] bg-indigo-600 text-white font-bold px-1.5 py-0.5 rounded-full shadow">
+                                  Selected
+                                </span>
+                              )}
+                              <p className="leading-relaxed">{msg.text}</p>
+                              {msg.originalText && msg.originalText !== msg.text && (
+                                <p className="text-[10px] text-emerald-200/80 mt-0.5 italic">
+                                  Original: {msg.originalText}
+                                </p>
+                              )}
+                              <div className="flex items-center justify-between mt-1 text-[9px] opacity-70 gap-2">
+                                <span className="text-indigo-300 opacity-90 group-hover:underline">
+                                  {isSelected ? '✓ Selected' : 'Tap to Translate & Answer'}
+                                </span>
+                                <span>{timeStr}</span>
+                              </div>
                             </div>
-                            <p className="leading-relaxed">{msg.text}</p>
-                            <span className="text-[9px] opacity-70 block text-right mt-1">{msg.time}</span>
-                          </div>
-                        );
-                      })}
+                          );
+                        })
+                      )}
                     </>
                   )}
 
@@ -2940,19 +3052,34 @@ export default function App() {
 
               {/* Dictionary List */}
               <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                {userDictionary.map(item => (
-                  <div key={item.id} className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold text-sm text-slate-200">{item.term}</div>
-                      <div className="text-[11px] text-slate-400">
-                        Category: <span className="text-indigo-400 uppercase">{item.category}</span> • Action: {item.action}
+                {userDictionary.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl">
+                    No protected dictionary terms in database yet. Add words above to prevent them from being translated.
+                  </div>
+                ) : (
+                  userDictionary.map(item => (
+                    <div key={item.id} className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold text-sm text-slate-200">{item.term}</div>
+                        <div className="text-[11px] text-slate-400">
+                          Category: <span className="text-indigo-400 uppercase">{item.category}</span> • Action: {item.action}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded">
+                          Protected
+                        </span>
+                        <button
+                          onClick={() => handleDeleteDictionary(item.id)}
+                          className="text-slate-400 hover:text-rose-400 p-1 transition text-xs"
+                          title="Delete from database"
+                        >
+                          ✕
+                        </button>
                       </div>
                     </div>
-                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded">
-                      Protected
-                    </span>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
 
@@ -3009,17 +3136,32 @@ export default function App() {
 
               {/* Glossary List */}
               <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                {userGlossary.map(item => (
-                  <div key={item.id} className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold text-sm text-slate-200">
-                        "{item.sourceTerm}" <span className="text-slate-500">→</span> <span className="text-emerald-400 font-bold">"{item.targetTerm}"</span>
-                      </div>
-                      <div className="text-[11px] text-slate-400">Applied automatically to translated & rewritten text</div>
-                    </div>
-                    <span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded">Active</span>
+                {userGlossary.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl">
+                    No custom glossary rules in database yet. Add custom mappings above.
                   </div>
-                ))}
+                ) : (
+                  userGlossary.map(item => (
+                    <div key={item.id} className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold text-sm text-slate-200">
+                          "{item.sourceTerm}" <span className="text-slate-500">→</span> <span className="text-emerald-400 font-bold">"{item.targetTerm}"</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400">Applied automatically to translated & rewritten text</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded">Active</span>
+                        <button
+                          onClick={() => handleDeleteGlossary(item.id)}
+                          className="text-slate-400 hover:text-rose-400 p-1 transition text-xs"
+                          title="Delete from database"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 

@@ -1,110 +1,33 @@
 import { UserDictionaryEntry, GlossaryEntry } from '../../shared/types';
+import { dbService } from './db.service';
 
 export class DictionaryService {
-  private userDictionaries: Map<string, UserDictionaryEntry[]> = new Map();
-  private userGlossaries: Map<string, GlossaryEntry[]> = new Map();
-
-  constructor() {
-    // Seed default common dictionary entries for demonstration/testing
-    const defaultDict: UserDictionaryEntry[] = [
-      {
-        id: 'dict-1',
-        term: 'Bhavesh',
-        category: 'name',
-        action: 'never_translate',
-        notes: 'Personal name - keep intact'
-      },
-      {
-        id: 'dict-2',
-        term: 'AI KeyBoard',
-        category: 'product',
-        action: 'never_translate'
-      },
-      {
-        id: 'dict-2-b',
-        term: 'LangFlow',
-        category: 'product',
-        action: 'never_translate'
-      },
-      {
-        id: 'dict-3',
-        term: 'DevBhavesh',
-        category: 'name',
-        action: 'never_translate'
-      }
-    ];
-
-    const defaultGlossary: GlossaryEntry[] = [
-      {
-        id: 'gloss-1',
-        sourceTerm: 'ticket',
-        targetTerm: 'support ticket',
-        caseSensitive: false
-      },
-      {
-        id: 'gloss-2',
-        sourceTerm: 'customer',
-        targetTerm: 'client',
-        caseSensitive: false
-      },
-      {
-        id: 'gloss-3',
-        sourceTerm: 'deployment',
-        targetTerm: 'release',
-        caseSensitive: false
-      }
-    ];
-
-    this.userDictionaries.set('default', defaultDict);
-    this.userGlossaries.set('default', defaultGlossary);
-  }
-
   getDictionary(userId: string = 'default'): UserDictionaryEntry[] {
-    return this.userDictionaries.get(userId) || this.userDictionaries.get('default') || [];
+    return dbService.getDictionary(userId);
   }
 
   addDictionaryEntry(userId: string = 'default', entry: Omit<UserDictionaryEntry, 'id'>): UserDictionaryEntry {
-    const list = this.getDictionary(userId);
-    const newEntry: UserDictionaryEntry = {
-      ...entry,
-      id: `dict-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
-    };
-    list.push(newEntry);
-    this.userDictionaries.set(userId, list);
-    return newEntry;
+    return dbService.addDictionaryEntry(userId, entry);
   }
 
   deleteDictionaryEntry(userId: string = 'default', id: string): boolean {
-    const list = this.getDictionary(userId);
-    const updated = list.filter(e => e.id !== id);
-    this.userDictionaries.set(userId, updated);
-    return updated.length < list.length;
+    return dbService.deleteDictionaryEntry(userId, id);
   }
 
   getGlossary(userId: string = 'default'): GlossaryEntry[] {
-    return this.userGlossaries.get(userId) || this.userGlossaries.get('default') || [];
+    return dbService.getGlossary(userId);
   }
 
   addGlossaryEntry(userId: string = 'default', entry: Omit<GlossaryEntry, 'id'>): GlossaryEntry {
-    const list = this.getGlossary(userId);
-    const newEntry: GlossaryEntry = {
-      ...entry,
-      id: `gloss-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
-    };
-    list.push(newEntry);
-    this.userGlossaries.set(userId, list);
-    return newEntry;
+    return dbService.addGlossaryEntry(userId, entry);
   }
 
   deleteGlossaryEntry(userId: string = 'default', id: string): boolean {
-    const list = this.getGlossary(userId);
-    const updated = list.filter(e => e.id !== id);
-    this.userGlossaries.set(userId, updated);
-    return updated.length < list.length;
+    return dbService.deleteGlossaryEntry(userId, id);
   }
 
   /**
-   * Pre-processes text to protect protected dictionary words with non-translatable placeholders
+   * Pre-processes text to protect dictionary words with non-translatable placeholders
    */
   protectEntities(text: string, userId: string = 'default'): { protectedText: string; tokens: Map<string, string> } {
     const dict = this.getDictionary(userId);

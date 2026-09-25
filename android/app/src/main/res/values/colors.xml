@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand & Accent Colors -->
+    <color name="primary">#6366F1</color>
+    <color name="primary_dark">#4F46E5</color>
+    <color name="primary_light">#818CF8</color>
+    <color name="accent">#10B981</color>
+
+    <!-- Keyboard Dark Theme Colors -->
+    <color name="keyboard_bg">#18181B</color>
+    <color name="keyboard_toolbar_bg">#27272A</color>
+    <color name="keyboard_key_bg">#3F3F46</color>
+    <color name="keyboard_key_pressed">#52525B</color>
+    <color name="keyboard_action_key_bg">#6366F1</color>
+    <color name="keyboard_action_key_pressed">#4F46E5</color>
+    <color name="keyboard_text_primary">#F4F4F5</color>
+    <color name="keyboard_text_secondary">#A1A1AA</color>
+    <color name="keyboard_divider">#27272A</color>
+
+    <!-- Status & Chips -->
+    <color name="chip_bg">#3F3F46</color>
+    <color name="chip_selected_bg">#4F46E5</color>
+    <color name="chip_text">#F4F4F5</color>
+    <color name="status_green">#10B981</color>
+    <color name="status_amber">#F59E0B</color>
+    <color name="status_red">#EF4444</color>
+
+    <!-- Common UI -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="surface_dark">#09090B</color>
+    <color name="surface_card">#18181B</color>
+    <color name="border_dark">#27272A</color>
+</resources>

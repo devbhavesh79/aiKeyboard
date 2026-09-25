@@ -1,68 +1,65 @@
 package com.langflow.keyboard.ime
 
+import android.content.Intent
 import android.inputmethodservice.InputMethodService
-import android.text.InputType
 import android.util.Log
 import android.view.View
 import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputConnection
 import android.widget.Toast
 import com.langflow.keyboard.client.LangFlowApiClient
-import com.langflow.keyboard.model.GrammarResult
-import com.langflow.keyboard.model.LanguageType
-import com.langflow.keyboard.model.ReplySuggestion
-import com.langflow.keyboard.model.TranslateResult
+import com.langflow.keyboard.manager.*
+import com.langflow.keyboard.model.*
 import kotlinx.coroutines.*
 import java.util.Stack
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * LangFlowIME - Production-Grade Android InputMethodService
+ * LangFlowIME - Complete Production Android InputMethodService
  *
- * Implements full Android Input Method Framework (IMF) compliance:
- * 1. Strictly local normal typing with zero network latency.
+ * Implements Android Input Method Framework (IMF) compliance:
+ * 1. Strictly local normal typing with 0ms network latency.
  * 2. EditorInfo inspection for password, PIN, and sensitive field isolation.
  * 3. Exact selected text retrieval via InputConnection.getSelectedText().
- * 4. Selection-aware text replacement preserving cursor, emoji, spaces & Unicode.
- * 5. App-switching and session lifecycle protection - in-flight requests for switched apps are safely discarded.
- * 6. Separate language state management: targetLanguage, replyLanguage, grammarLanguage.
- * 7. Guaranteed reply language generation in requested language (Hindi, Gujarati, English, etc.).
- * 8. Never automatically sends messages - user manually reviews & sends.
- * 9. Comprehensive undo/redo stack.
- * 10. Robust offline/error handling with zero keyboard freeze.
+ * 4. Selection-aware text replacement preserving surrounding content, emojis & spaces.
+ * 5. App-switching and session lifecycle protection - in-flight requests safely cancelled.
+ * 6. Multi-language management: Target language, Reply language, Grammar language, "No Translation" mode.
+ * 7. Real-time Indic phonetic transliteration (e.g. "namaste" -> "नमस्ते", "kem cho" -> "કેમ છો").
+ * 8. Entity protection (masking personal terms) & deterministic glossary enforcement.
+ * 9. Never auto-sends without user intent - commits into active editor for user review.
+ * 10. Real-time speech-to-text integration with fallback.
+ * 11. Undo/redo history stack.
  */
-class LangFlowIME : InputMethodService() {
+class LangFlowIME : InputMethodService(), KeyboardView.KeyEventListener {
 
     companion object {
         private const val TAG = "LangFlowIME"
-        private const val MAX_CONTEXT_LENGTH = 500
+        private const val MAX_CONTEXT_LENGTH = 1000
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private val apiClient = LangFlowApiClient()
 
-    // Undo history stack
+    // Specialized Managers
+    private lateinit var settingsManager: SettingsManager
+    private lateinit var languageManager: LanguageManager
+    private lateinit var dictGlossaryManager: DictionaryGlossaryManager
+    private lateinit var voiceInputManager: VoiceInputManager
+    private lateinit var clipboardManager: ClipboardManager
+    private val icManager = InputConnectionManager()
+    private var apiClient = LangFlowApiClient()
+
+    // View
+    private var keyboardView: KeyboardView? = null
+
+    // Undo stack
     private val undoStack = Stack<TextSnapshot>()
 
-    // Session & App-Switching Safety
+    // Session & Lifecycle Safety
     private val sessionCounter = AtomicLong(0)
     private var currentSessionId: Long = 0
     private var activePackageName: String? = null
     private var isSecureField: Boolean = false
-    private var isAIOperationsAllowed: Boolean = true
-
-    // Distinct language states
-    var targetLanguage: String = "en"
-        private set
-    var replyLanguage: String = "auto"
-        private set
-    var grammarLanguage: String = "auto"
-        private set
-    var sourceLanguage: String = "auto"
-        private set
-
-    // Active AI job
     private var currentActiveJob: Job? = null
+    private var debounceTranslationJob: Job? = null
 
     data class TextSnapshot(
         val originalText: String,
@@ -73,109 +70,202 @@ class LangFlowIME : InputMethodService() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.i(TAG, "LangFlowIME service created.")
+        settingsManager = SettingsManager(this)
+        languageManager = LanguageManager(settingsManager.sourceLanguage, settingsManager.targetLanguage)
+        dictGlossaryManager = DictionaryGlossaryManager()
+        voiceInputManager = VoiceInputManager(this)
+        clipboardManager = ClipboardManager(this)
+        apiClient = LangFlowApiClient(settingsManager.serverUrl)
+
+        Log.i(TAG, "LangFlowIME created.")
+    }
+
+    override fun onCreateInputView(): View {
+        val view = KeyboardView(this)
+        view.listener = this
+        view.setTranslationMode(settingsManager.translationMode)
+        view.setLanguages(languageManager.currentSourceLang.code, languageManager.currentTargetLang.code)
+        keyboardView = view
+        return view
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
 
-        // Generate a new session ID for every new editor view or app switch
         currentSessionId = sessionCounter.incrementAndGet()
         currentActiveJob?.cancel()
+        debounceTranslationJob?.cancel()
         undoStack.clear()
 
         info?.let { editorInfo ->
             activePackageName = editorInfo.packageName
-
-            // Security: Inspect inputType to detect password and sensitive fields
-            val variation = editorInfo.inputType and InputType.TYPE_MASK_VARIATION
-            val isPassword = variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
-                    variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
-                    variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
-                    (editorInfo.inputType and InputType.TYPE_MASK_CLASS == InputType.TYPE_CLASS_NUMBER &&
-                            variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD)
-
-            isSecureField = isPassword
-            isAIOperationsAllowed = !isPassword
-
-            updateToolbarUi(isSecure = isPassword)
+            isSecureField = SecureFieldDetector.isSecureField(editorInfo)
+            keyboardView?.setSecureState(isSecureField)
         } ?: run {
             activePackageName = null
             isSecureField = false
-            isAIOperationsAllowed = true
+            keyboardView?.setSecureState(false)
         }
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
-        // Invalidate active session so in-flight requests cannot commit text to an inactive editor
         currentSessionId = sessionCounter.incrementAndGet()
         currentActiveJob?.cancel()
+        debounceTranslationJob?.cancel()
+        voiceInputManager.stopListening()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        voiceInputManager.stopListening()
         serviceScope.cancel()
     }
 
-    // --- LANGUAGE CONFIGURATION CONTROLS ---
+    // --- KEYBOARD VIEW LISTENER CALLBACKS ---
 
-    fun setTargetLanguage(langCode: String) {
-        targetLanguage = langCode.trim().lowercase()
+    override fun onCharacter(char: String) {
+        icManager.commitText(currentInputConnection, char)
+        handleTypingStateChanged()
     }
 
-    fun setReplyLanguage(langCode: String) {
-        replyLanguage = langCode.trim().lowercase()
+    override fun onDelete() {
+        icManager.handleDelete(currentInputConnection)
+        handleTypingStateChanged()
     }
 
-    fun setGrammarLanguage(langCode: String) {
-        grammarLanguage = langCode.trim().lowercase()
+    override fun onEnter() {
+        if (settingsManager.translationMode == TranslationMode.TRANSLATE_ON_SEND && !isSecureField) {
+            triggerTranslateOnSend()
+        } else {
+            icManager.handleActionOrEnter(currentInputConnection, currentInputEditorInfo)
+        }
     }
 
-    fun setSourceLanguage(langCode: String) {
-        sourceLanguage = langCode.trim().lowercase()
+    override fun onSpace() {
+        icManager.commitText(currentInputConnection, " ")
+        handleTypingStateChanged()
     }
 
-    // --- NORMAL KEYBOARD OPERATIONS (Strictly local, zero network) ---
+    override fun onShiftToggle(isShifted: Boolean, isCapsLock: Boolean) {
+        // Handled in KeyboardView
+    }
 
-    fun handleKeyPress(primaryCode: Int) {
+    override fun onModeChanged(newMode: TranslationMode) {
+        settingsManager.translationMode = newMode
+        showToast("Mode: ${newMode.name}")
+    }
+
+    override fun onLanguageSelected(lang: LanguageOption) {
+        languageManager.setTargetLanguage(lang.code)
+        settingsManager.targetLanguage = lang.code
+        keyboardView?.setLanguages(languageManager.currentSourceLang.code, lang.code)
+        showToast("Target: ${lang.name}")
+    }
+
+    override fun onSuggestionSelected(word: String) {
         val ic = currentInputConnection ?: return
-        when (primaryCode) {
-            -5 -> { // Backspace
-                val selected = ic.getSelectedText(0)
-                if (!selected.isNullOrEmpty()) {
-                    ic.commitText("", 1)
-                } else {
-                    ic.deleteSurroundingText(1, 0)
+        val currentWord = icManager.getCurrentWord(ic)
+        if (currentWord.isNotEmpty()) {
+            icManager.replaceText(
+                ic = ic,
+                originalLength = currentWord.length,
+                replacement = "$word ",
+                isSelection = false
+            )
+        } else {
+            icManager.commitText(ic, "$word ")
+        }
+    }
+
+    // --- TYPING & TRANSLITERATION / MODE A DISPATCHER ---
+
+    private fun handleTypingStateChanged() {
+        if (isSecureField) return
+
+        val ic = currentInputConnection ?: return
+        val currentWord = icManager.getCurrentWord(ic)
+
+        // 1. Instant local transliteration suggestions (0ms latency)
+        if (currentWord.isNotEmpty()) {
+            val candidates = languageManager.getTransliterationCandidates(currentWord)
+            if (candidates.isNotEmpty()) {
+                keyboardView?.showWordSuggestions(candidates) { selectedCandidate ->
+                    onSuggestionSelected(selectedCandidate)
                 }
             }
-            -1 -> { // Shift / Caps
-                // Handled in layout state
-            }
-            10 -> { // Enter
-                val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
-                    ?: EditorInfo.IME_ACTION_NONE
-                if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
-                    ic.performEditorAction(action)
-                } else {
-                    ic.commitText("\n", 1)
-                }
-            }
-            32 -> { // Space
-                ic.commitText(" ", 1)
-            }
-            else -> {
-                val char = primaryCode.toChar().toString()
-                ic.commitText(char, 1)
+        }
+
+        // 2. Mode A: Automatic real-time debounced translation
+        if (settingsManager.translationMode == TranslationMode.AUTO_TRANSLATE && !languageManager.isNoTranslationActive()) {
+            debounceTranslationJob?.cancel()
+            debounceTranslationJob = serviceScope.launch {
+                delay(settingsManager.debounceMs)
+                executeAutoTranslateDebounced()
             }
         }
     }
 
-    // --- 1. GOOGLE CLOUD TRANSLATION & SELECTION-AWARE REPLACEMENT ---
+    private suspend fun executeAutoTranslateDebounced() {
+        val ic = currentInputConnection ?: return
+        val currentPackage = activePackageName
+        val sessionId = currentSessionId
 
-    fun onTranslateTapped() {
-        if (!isAIOperationsAllowed) {
-            showToast("AI features disabled in password & sensitive fields.")
+        val activeText = icManager.getActiveDraftText(ic)
+        if (activeText.isBlank() || activeText.length < 2) return
+
+        // Capture snapshot before network call to prevent race condition
+        val snapshotBeforeRequest = activeText
+
+        // Entity protection masking
+        val masked = dictGlossaryManager.protectEntities(activeText)
+
+        try {
+            val result = apiClient.translate(
+                text = masked.maskedText,
+                sourceLang = languageManager.currentSourceLang.code,
+                targetLang = languageManager.currentTargetLang.code,
+                tone = settingsManager.defaultTone
+            )
+
+            // Verify session, package, and ensure user hasn't typed new text during network delay
+            if (currentSessionId != sessionId || activePackageName != currentPackage || currentInputConnection == null) {
+                return
+            }
+
+            val currentTextNow = icManager.getActiveDraftText(currentInputConnection)
+            if (currentTextNow != snapshotBeforeRequest) {
+                // User continued typing while request was in-flight. Discard stale response to prevent text corruption!
+                return
+            }
+
+            if (result != null && result.translatedText.isNotBlank()) {
+                val restored = dictGlossaryManager.restoreEntities(result.translatedText, masked.entityMap)
+                val finalized = dictGlossaryManager.applyGlossary(restored)
+
+                // Commits replacement
+                icManager.replaceText(
+                    ic = currentInputConnection,
+                    originalLength = activeText.length,
+                    replacement = finalized,
+                    isSelection = false
+                )
+            }
+        } catch (e: Exception) {
+            // Retain local typing uninterrupted on network error
+        }
+    }
+
+    // --- 1. MANUAL TRANSLATE ACTION ---
+
+    override fun onTranslateRequested() {
+        if (isSecureField) {
+            showToast("AI features disabled in password & secure fields.")
+            return
+        }
+
+        if (languageManager.isNoTranslationActive()) {
+            showToast("No Translation mode is active.")
             return
         }
 
@@ -183,67 +273,59 @@ class LangFlowIME : InputMethodService() {
         val currentPackage = activePackageName
         val sessionId = currentSessionId
 
-        // Exact selected text retrieval (Requirement 3: Never guess selection or use clipboard)
-        val selectedText = ic.getSelectedText(0)
-        val isSelectionActive = !selectedText.isNullOrBlank()
+        val selectedText = icManager.getSelectedText(ic)
+        val isSelection = !selectedText.isNullOrBlank()
+        val textToTranslate = if (isSelection) selectedText!! else icManager.getActiveDraftText(ic)
 
-        val textToTranslate = if (isSelectionActive) {
-            selectedText.toString()
-        } else {
-            // If no text is highlighted, check text before cursor
-            val before = ic.getTextBeforeCursor(MAX_CONTEXT_LENGTH, 0)?.toString()?.trim() ?: ""
-            if (before.isEmpty()) {
-                showToast("Please type or select text to translate.")
-                return
-            }
-            before
+        if (textToTranslate.isBlank()) {
+            showToast(getString(com.langflow.keyboard.R.string.toast_no_text))
+            return
         }
+
+        val masked = dictGlossaryManager.protectEntities(textToTranslate)
 
         currentActiveJob?.cancel()
         currentActiveJob = serviceScope.launch {
-            setToolbarLoading(true, "Translating to $targetLanguage...")
+            keyboardView?.setLoading(true, "Translating to ${languageManager.currentTargetLang.name}...")
             try {
                 val result = apiClient.translate(
-                    text = textToTranslate,
-                    sourceLang = sourceLanguage,
-                    targetLang = targetLanguage,
-                    tone = "natural"
+                    text = masked.maskedText,
+                    sourceLang = languageManager.currentSourceLang.code,
+                    targetLang = languageManager.currentTargetLang.code,
+                    tone = settingsManager.defaultTone
                 )
-                setToolbarLoading(false)
+                keyboardView?.setLoading(false)
 
-                // Lifecycle & App-Switching Safety Check (Requirement 7)
                 if (currentSessionId != sessionId || activePackageName != currentPackage || currentInputConnection == null) {
-                    Log.w(TAG, "Translation dropped: App or editor session changed during request.")
                     return@launch
                 }
 
                 if (result != null && result.translatedText.isNotBlank()) {
-                    showTranslationReview(
-                        original = textToTranslate,
-                        translated = result.translatedText,
-                        onAccept = {
-                            applyReplacement(
-                                ic = currentInputConnection ?: return@showTranslationReview,
-                                original = textToTranslate,
-                                replacement = result.translatedText,
-                                isSelection = isSelectionActive
-                            )
-                        }
+                    val restored = dictGlossaryManager.restoreEntities(result.translatedText, masked.entityMap)
+                    val finalized = dictGlossaryManager.applyGlossary(restored)
+
+                    val targetIc = currentInputConnection ?: return@launch
+                    undoStack.push(TextSnapshot(textToTranslate, finalized, isSelection))
+                    icManager.replaceText(
+                        ic = targetIc,
+                        originalLength = textToTranslate.length,
+                        replacement = finalized,
+                        isSelection = isSelection
                     )
                 } else {
                     showToast("Translation unavailable. Check connection.")
                 }
             } catch (e: Exception) {
-                setToolbarLoading(false)
+                keyboardView?.setLoading(false)
                 showToast("Translation error. Local typing unaffected.")
             }
         }
     }
 
-    // --- 2. SMART AI REPLY IN EXACT REQUESTED LANGUAGE ---
+    // --- 2. SMART AI REPLY ---
 
-    fun onReplyActionTapped(incomingContext: String, userDraft: String = "") {
-        if (!isAIOperationsAllowed) {
+    override fun onReplyRequested() {
+        if (isSecureField) {
             showToast("AI features disabled in secure fields.")
             return
         }
@@ -252,45 +334,45 @@ class LangFlowIME : InputMethodService() {
         val currentPackage = activePackageName
         val sessionId = currentSessionId
 
-        val effectiveReplyLang = if (replyLanguage == "auto") {
-            detectIncomingLanguage(incomingContext)
-        } else {
-            replyLanguage
+        // Read context from selection or clipboard
+        val userDraft = icManager.getActiveDraftText(ic)
+        val clipboardText = clipboardManager.getPrimaryClipText()
+        val incomingContext = when {
+            clipboardText != null && clipboardText.isNotBlank() -> clipboardText
+            userDraft.isNotBlank() -> userDraft
+            else -> "Hello"
         }
+
+        val targetLangCode = languageManager.resolveEffectiveLanguage(
+            languageManager.currentReplyLang.code,
+            incomingContext
+        )
 
         currentActiveJob?.cancel()
         currentActiveJob = serviceScope.launch {
-            setToolbarLoading(true, "Generating replies in $effectiveReplyLang...")
+            keyboardView?.setLoading(true, "Generating replies in $targetLangCode...")
             try {
                 val suggestions = apiClient.generateReplies(
                     incomingMessage = incomingContext,
                     draftMessage = userDraft,
-                    targetLanguage = effectiveReplyLang,
-                    tone = "professional",
+                    targetLanguage = targetLangCode,
+                    tone = settingsManager.defaultTone,
                     intent = "neutral"
                 )
-                setToolbarLoading(false)
+                keyboardView?.setLoading(false)
 
-                // Lifecycle & App-Switching Safety Check
                 if (currentSessionId != sessionId || activePackageName != currentPackage || currentInputConnection == null) {
-                    Log.w(TAG, "Reply suggestions dropped: User switched apps.")
                     return@launch
                 }
 
                 if (!suggestions.isNullOrEmpty()) {
-                    // Language validation: Verify suggestions match requested script
-                    val validatedSuggestions = validateSuggestionsLanguage(suggestions, effectiveReplyLang)
-
-                    showReplyOptions(validatedSuggestions) { selectedReply ->
-                        val targetIc = currentInputConnection ?: return@showReplyOptions
-                        // Safety: Check app didn't change before insertion
+                    keyboardView?.showReplySuggestions(suggestions) { selectedReply ->
+                        val targetIc = currentInputConnection ?: return@showReplySuggestions
                         if (currentSessionId != sessionId || activePackageName != currentPackage) {
-                            showToast("App changed. Reply was not inserted.")
-                            return@showReplyOptions
+                            showToast("App changed. Reply cancelled.")
+                            return@showReplySuggestions
                         }
 
-                        // Requirement 5: Insert EXACT suggestion into CURRENT input field
-                        // NEVER auto-send; user manually sends.
                         targetIc.beginBatchEdit()
                         try {
                             targetIc.commitText(selectedReply.text, 1)
@@ -302,135 +384,155 @@ class LangFlowIME : InputMethodService() {
                     showToast("Unable to generate suggestions.")
                 }
             } catch (e: Exception) {
-                setToolbarLoading(false)
+                keyboardView?.setLoading(false)
                 showToast("Reply generation error.")
             }
         }
     }
 
-    // --- 3. GRAMMAR CHECK & NATURAL REPHRASING ---
+    // --- 3. WORD TONE REWRITE ---
 
-    fun onGrammarCheckTapped() {
-        if (!isAIOperationsAllowed) return
+    override fun onToneRequested(toneKey: String) {
+        if (isSecureField) return
         val ic = currentInputConnection ?: return
         val currentPackage = activePackageName
         val sessionId = currentSessionId
 
-        val selected = ic.getSelectedText(0)
+        val selected = icManager.getSelectedText(ic)
         val isSelection = !selected.isNullOrBlank()
-        val textToCheck = if (isSelection) {
-            selected.toString()
-        } else {
-            ic.getTextBeforeCursor(MAX_CONTEXT_LENGTH, 0)?.toString()?.trim() ?: ""
-        }
-
-        if (textToCheck.isBlank()) {
-            showToast("Please enter text to check grammar.")
-            return
-        }
-
-        currentActiveJob?.cancel()
-        currentActiveJob = serviceScope.launch {
-            setToolbarLoading(true, "Checking grammar...")
-            try {
-                val result = apiClient.checkGrammar(textToCheck, grammarLanguage)
-                setToolbarLoading(false)
-
-                if (currentSessionId != sessionId || activePackageName != currentPackage || currentInputConnection == null) {
-                    return@launch
-                }
-
-                if (result != null) {
-                    showGrammarReview(result) {
-                        val targetIc = currentInputConnection ?: return@showGrammarReview
-                        applyReplacement(
-                            ic = targetIc,
-                            original = textToCheck,
-                            replacement = result.naturalPhrasing,
-                            isSelection = isSelection
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                setToolbarLoading(false)
-            }
-        }
-    }
-
-    // --- 4. WORD TONE REWRITER ---
-
-    fun onToneRewriteTapped(tone: String) {
-        if (!isAIOperationsAllowed) return
-        val ic = currentInputConnection ?: return
-        val currentPackage = activePackageName
-        val sessionId = currentSessionId
-
-        val selected = ic.getSelectedText(0)
-        val isSelection = !selected.isNullOrBlank()
-        val textToRewrite = if (isSelection) {
-            selected.toString()
-        } else {
-            ic.getTextBeforeCursor(MAX_CONTEXT_LENGTH, 0)?.toString()?.trim() ?: ""
-        }
+        val textToRewrite = if (isSelection) selected!! else icManager.getActiveDraftText(ic)
 
         if (textToRewrite.isBlank()) {
-            showToast("Please enter text to adjust tone.")
+            showToast("Please enter or select text to adjust tone.")
             return
         }
 
         currentActiveJob?.cancel()
         currentActiveJob = serviceScope.launch {
-            setToolbarLoading(true, "Rewriting tone...")
+            keyboardView?.setLoading(true, "Applying $toneKey tone...")
             try {
-                val result = apiClient.rewriteTone(textToRewrite, "make_$tone", targetLanguage)
-                setToolbarLoading(false)
+                val result = apiClient.rewriteTone(
+                    text = textToRewrite,
+                    action = toneKey,
+                    targetLanguage = languageManager.currentTargetLang.code
+                )
+                keyboardView?.setLoading(false)
 
                 if (currentSessionId != sessionId || activePackageName != currentPackage || currentInputConnection == null) {
                     return@launch
                 }
 
                 if (result != null && result.rewrittenText.isNotBlank()) {
-                    applyReplacement(
-                        ic = currentInputConnection ?: return@launch,
-                        original = textToRewrite,
+                    val targetIc = currentInputConnection ?: return@launch
+                    undoStack.push(TextSnapshot(textToRewrite, result.rewrittenText, isSelection))
+                    icManager.replaceText(
+                        ic = targetIc,
+                        originalLength = textToRewrite.length,
                         replacement = result.rewrittenText,
                         isSelection = isSelection
                     )
                 }
             } catch (e: Exception) {
-                setToolbarLoading(false)
+                keyboardView?.setLoading(false)
             }
         }
     }
 
-    // --- INPUTCONNECTION COMMIT & RESILIENT REPLACEMENT ---
+    // --- 4. GRAMMAR CHECK ---
 
-    private fun applyReplacement(
-        ic: InputConnection,
-        original: String,
-        replacement: String,
-        isSelection: Boolean
-    ) {
-        ic.beginBatchEdit()
-        try {
-            undoStack.push(TextSnapshot(original, replacement, isSelection))
+    override fun onGrammarRequested() {
+        if (isSecureField) return
+        val ic = currentInputConnection ?: return
+        val currentPackage = activePackageName
+        val sessionId = currentSessionId
 
-            if (isSelection) {
-                // In Android IMF, committing text with an active selection replaces ONLY that selection,
-                // preserving all surrounding text, spaces, emoji, and Unicode!
-                ic.commitText(replacement, 1)
-            } else {
-                // Replace preceding draft text
-                ic.deleteSurroundingText(original.length, 0)
-                ic.commitText(replacement, 1)
+        val selected = icManager.getSelectedText(ic)
+        val isSelection = !selected.isNullOrBlank()
+        val textToCheck = if (isSelection) selected!! else icManager.getActiveDraftText(ic)
+
+        if (textToCheck.isBlank()) {
+            showToast("Please enter or select text to check grammar.")
+            return
+        }
+
+        currentActiveJob?.cancel()
+        currentActiveJob = serviceScope.launch {
+            keyboardView?.setLoading(true, "Checking grammar...")
+            try {
+                val result = apiClient.checkGrammar(
+                    text = textToCheck,
+                    language = languageManager.currentGrammarLang.code
+                )
+                keyboardView?.setLoading(false)
+
+                if (currentSessionId != sessionId || activePackageName != currentPackage || currentInputConnection == null) {
+                    return@launch
+                }
+
+                if (result != null) {
+                    keyboardView?.showGrammarPreview(result) {
+                        val targetIc = currentInputConnection ?: return@showGrammarPreview
+                        undoStack.push(TextSnapshot(textToCheck, result.naturalPhrasing, isSelection))
+                        icManager.replaceText(
+                            ic = targetIc,
+                            originalLength = textToCheck.length,
+                            replacement = result.naturalPhrasing,
+                            isSelection = isSelection
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                keyboardView?.setLoading(false)
             }
-        } finally {
-            ic.endBatchEdit()
         }
     }
 
-    fun onUndoTapped() {
-        if (undoStack.isEmpty()) return
+    // --- 5. VOICE INPUT ---
+
+    override fun onVoiceRequested() {
+        if (voiceInputManager.isListening()) {
+            voiceInputManager.stopListening()
+            keyboardView?.setLoading(false)
+            return
+        }
+
+        voiceInputManager.startListening(
+            languageLocale = "en-US",
+            callback = object : VoiceInputManager.VoiceCallback {
+                override fun onSpeechStart() {
+                    keyboardView?.setLoading(true, "Listening...")
+                }
+
+                override fun onPartialSpeechResult(partialText: String) {
+                    keyboardView?.setLoading(true, "Heard: $partialText")
+                }
+
+                override fun onFinalSpeechResult(finalText: String) {
+                    keyboardView?.setLoading(false)
+                    icManager.commitText(currentInputConnection, "$finalText ")
+                    handleTypingStateChanged()
+                }
+
+                override fun onSpeechError(errorMessage: String) {
+                    keyboardView?.setLoading(false)
+                    showToast(errorMessage)
+                }
+
+                override fun onSpeechEnd() {
+                    keyboardView?.setLoading(false)
+                }
+            }
+        )
+    }
+
+    // --- 6. UNDO ACTION ---
+
+    override fun onUndoRequested() {
+        if (undoStack.isEmpty()) {
+            showToast("Nothing to undo.")
+            return
+        }
+
         val ic = currentInputConnection ?: return
         val snapshot = undoStack.pop()
 
@@ -443,52 +545,47 @@ class LangFlowIME : InputMethodService() {
         }
     }
 
-    // --- LANGUAGE VALIDATION & SCRIPT DETECTION HELPERS ---
+    // --- 7. TRANSLATE ON SEND (MODE D) ---
 
-    private fun detectIncomingLanguage(text: String): String {
-        val gujaratiRegex = Regex("[\\u0A80-\\u0AFF]")
-        val devanagariRegex = Regex("[\\u0900-\\u097F]")
-        val arabicRegex = Regex("[\\u0600-\\u06FF]")
+    private fun triggerTranslateOnSend() {
+        val ic = currentInputConnection ?: return
+        val draft = icManager.getActiveDraftText(ic)
+        if (draft.isBlank()) {
+            icManager.handleActionOrEnter(ic, currentInputEditorInfo)
+            return
+        }
 
-        return when {
-            gujaratiRegex.containsMatchIn(text) -> "gu"
-            devanagariRegex.containsMatchIn(text) -> "hi"
-            arabicRegex.containsMatchIn(text) -> "ar"
-            else -> "en"
+        val currentPackage = activePackageName
+        val sessionId = currentSessionId
+
+        currentActiveJob?.cancel()
+        currentActiveJob = serviceScope.launch {
+            keyboardView?.setLoading(true, "Translating before send...")
+            try {
+                val result = apiClient.translate(
+                    text = draft,
+                    sourceLang = languageManager.currentSourceLang.code,
+                    targetLang = languageManager.currentTargetLang.code,
+                    tone = settingsManager.defaultTone
+                )
+                keyboardView?.setLoading(false)
+
+                if (currentSessionId != sessionId || activePackageName != currentPackage || currentInputConnection == null) {
+                    return@launch
+                }
+
+                val finalReplacement = result?.translatedText ?: draft
+                val targetIc = currentInputConnection ?: return@launch
+                icManager.replaceText(targetIc, draft.length, finalReplacement, false)
+                icManager.handleActionOrEnter(targetIc, currentInputEditorInfo)
+            } catch (e: Exception) {
+                keyboardView?.setLoading(false)
+                icManager.handleActionOrEnter(currentInputConnection, currentInputEditorInfo)
+            }
         }
     }
 
-    private fun validateSuggestionsLanguage(
-        suggestions: List<ReplySuggestion>,
-        requestedLang: String
-    ): List<ReplySuggestion> {
-        return when (requestedLang) {
-            "hi" -> {
-                val devanagari = Regex("[\\u0900-\\u097F]")
-                suggestions.filter { devanagari.containsMatchIn(it.text) }
-                    .ifEmpty { suggestions }
-            }
-            "gu" -> {
-                val gujarati = Regex("[\\u0A80-\\u0AFF]")
-                suggestions.filter { gujarati.containsMatchIn(it.text) }
-                    .ifEmpty { suggestions }
-            }
-            else -> suggestions
-        }
-    }
-
-    // --- UI HOOKS (Implemented by Keyboard View / Compose UI) ---
-
-    private fun updateToolbarUi(isSecure: Boolean) {}
-    private fun setToolbarLoading(loading: Boolean, status: String = "") {}
-    private fun showTranslationReview(original: String, translated: String, onAccept: () -> Unit) {
-        onAccept()
-    }
-    private fun showReplyOptions(suggestions: List<ReplySuggestion>, onSelect: (ReplySuggestion) -> Unit) {}
-    private fun showGrammarReview(result: GrammarResult, onAccept: () -> Unit) {
-        onAccept()
-    }
-    private fun showToast(msg: String) {
-        Toast.makeText(applicationContext, msg, Toast.LENGTH_SHORT).show()
+    private fun showToast(message: String) {
+        Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
     }
 }

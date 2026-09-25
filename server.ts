@@ -7,6 +7,7 @@ import { storeService } from './backend/services/store.service';
 import { dictionaryService } from './backend/services/dictionary.service';
 import { rateLimiterService } from './backend/services/rate-limiter.service';
 import { auditService } from './backend/services/audit.service';
+import { dbService } from './backend/services/db.service';
 import { ApiResponse } from './shared/types';
 
 dotenv.config();
@@ -355,14 +356,53 @@ app.delete('/api/v1/glossary/:id', (req: Request, res: Response) => {
   res.json({ success: true, data: { deleted } });
 });
 
+// Chat Conversations & Messages endpoints (Real-time DB)
+app.get('/api/v1/conversations', (req: Request, res: Response) => {
+  const userId = (req.query.userId as string) || 'default';
+  res.json({ success: true, data: dbService.getConversations(userId) });
+});
+
+app.post('/api/v1/conversations', (req: Request, res: Response) => {
+  const userId = (req.body.userId as string) || 'default';
+  const { appType = 'whatsapp', title } = req.body;
+  const conversation = dbService.getOrCreateConversation(userId, appType, title);
+  res.json({ success: true, data: conversation });
+});
+
+app.get('/api/v1/conversations/:id/messages', (req: Request, res: Response) => {
+  const messages = dbService.getMessages(req.params.id);
+  res.json({ success: true, data: messages });
+});
+
+app.post('/api/v1/conversations/:id/messages', (req: Request, res: Response) => {
+  const { sender = 'me', text, originalText, sourceLang, targetLang } = req.body;
+  if (!text || typeof text !== 'string') {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_INPUT', message: 'Message text is required.' } });
+  }
+  const msg = dbService.addMessage({
+    conversationId: req.params.id,
+    sender,
+    text,
+    originalText,
+    sourceLang,
+    targetLang
+  });
+  res.json({ success: true, data: msg });
+});
+
+app.delete('/api/v1/conversations/:id', (req: Request, res: Response) => {
+  const deleted = dbService.deleteConversation(req.params.id);
+  res.json({ success: true, data: { deleted } });
+});
+
 // Feedback endpoint (Section 140)
 app.post('/api/v1/feedback', (req: Request, res: Response) => {
-  const { feature, rating, reason } = req.body;
-  storeService.recordFeedback({ feature, rating, reason });
+  const { feature, rating, reason, userId = 'default' } = req.body;
+  storeService.recordFeedback({ feature, rating, reason }, userId);
   res.json({ success: true, data: { status: 'recorded' } });
 });
 
-// Telemetry & Observability (Section 80) - NO raw user messages
+// Telemetry & Observability (Section 80) - Real DB aggregations
 app.get('/api/v1/telemetry', (req: Request, res: Response) => {
   res.json({
     success: true,
@@ -373,6 +413,14 @@ app.get('/api/v1/telemetry', (req: Request, res: Response) => {
     }
   });
 });
+
+// System Endpoint: Clear All Data / Reset Database ("purane jitne bhi data he clear karo")
+app.post('/api/v1/system/clear-data', (req: Request, res: Response) => {
+  const userId = (req.body.userId as string) || 'default';
+  const result = storeService.clearAllData(userId);
+  res.json({ success: true, data: result });
+});
+
 
 // --- VITE MIDDLEWARE INTEGRATION (React Guidelines) ---
 async function startServer() {

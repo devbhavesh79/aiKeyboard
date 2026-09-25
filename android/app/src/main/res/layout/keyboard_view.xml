@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/keyboard_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/keyboard_bg"
+    android:orientation="vertical"
+    android:paddingBottom="4dp">
+
+    <!-- 1. AI Ribbon Toolbar -->
+    <HorizontalScrollView
+        android:id="@+id/toolbar_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:background="@color/keyboard_toolbar_bg"
+        android:fillViewport="true"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/toolbar_container"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="6dp">
+
+            <!-- Language Switcher Chip -->
+            <TextView
+                android:id="@+id/chip_language"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/toolbar_chip_background"
+                android:gravity="center"
+                android:paddingHorizontal="10dp"
+                android:text="🌐 Hinglish ➔ EN"
+                android:textColor="@color/keyboard_text_primary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <!-- Mode Selector Chip -->
+            <TextView
+                android:id="@+id/chip_mode"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/toolbar_chip_background"
+                android:gravity="center"
+                android:paddingHorizontal="10dp"
+                android:text="⚡ Auto Translate"
+                android:textColor="@color/status_green"
+                android:textSize="12sp" />
+
+            <!-- Translate Action Button -->
+            <LinearLayout
+                android:id="@+id/btn_action_translate"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/toolbar_chip_background"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingHorizontal="10dp">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_marginEnd="4dp"
+                    android:src="@drawable/ic_translate" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Translate"
+                    android:textColor="@color/keyboard_text_primary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Word Tone Action Button -->
+            <LinearLayout
+                android:id="@+id/btn_action_tone"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/toolbar_chip_background"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingHorizontal="10dp">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_marginEnd="4dp"
+                    android:src="@drawable/ic_tone" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Tone"
+                    android:textColor="@color/keyboard_text_primary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Smart Reply Action Button -->
+            <LinearLayout
+                android:id="@+id/btn_action_reply"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/toolbar_chip_background"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingHorizontal="10dp">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_marginEnd="4dp"
+                    android:src="@drawable/ic_reply" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Smart Reply"
+                    android:textColor="@color/keyboard_text_primary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Grammar Check Action Button -->
+            <LinearLayout
+                android:id="@+id/btn_action_grammar"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/toolbar_chip_background"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingHorizontal="10dp">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_marginEnd="4dp"
+                    android:src="@drawable/ic_grammar" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Grammar"
+                    android:textColor="@color/keyboard_text_primary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <!-- Voice Input Button -->
+            <ImageView
+                android:id="@+id/btn_action_voice"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/toolbar_chip_background"
+                android:padding="6dp"
+                android:src="@drawable/ic_mic" />
+
+            <!-- Undo Action Button -->
+            <ImageView
+                android:id="@+id/btn_action_undo"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/toolbar_chip_background"
+                android:padding="6dp"
+                android:src="@drawable/ic_undo" />
+
+            <!-- Settings Button -->
+            <ImageView
+                android:id="@+id/btn_action_settings"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@drawable/toolbar_chip_background"
+                android:padding="6dp"
+                android:src="@drawable/ic_settings" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- 2. Status & Notification Bar -->
+    <LinearLayout
+        android:id="@+id/status_bar_container"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:background="@color/surface_card"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:visibility="gone">
+
+        <ProgressBar
+            android:id="@+id/status_progress"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginEnd="8dp"
+            android:indeterminate="true" />
+
+        <TextView
+            android:id="@+id/tv_status_message"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Translating..."
+            android:textColor="@color/keyboard_text_secondary"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- 3. Suggestion & Smart Reply Strip -->
+    <HorizontalScrollView
+        android:id="@+id/suggestions_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:background="@color/surface_dark"
+        android:fillViewport="true"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/suggestions_container"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp" />
+    </HorizontalScrollView>
+
+    <!-- 4. Tone Option Sub-Ribbon (When Tone is selected) -->
+    <HorizontalScrollView
+        android:id="@+id/tone_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="38dp"
+        android:background="@color/keyboard_toolbar_bg"
+        android:fillViewport="true"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/tone_container"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp" />
+    </HorizontalScrollView>
+
+    <!-- 5. Keypad Matrix -->
+    <LinearLayout
+        android:id="@+id/keypad_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="2dp"
+        android:paddingTop="4dp" />
+
+</LinearLayout>

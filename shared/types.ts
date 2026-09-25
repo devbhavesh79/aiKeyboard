@@ -238,6 +238,26 @@ export interface UserPreferences {
   learnWritingStyleOptIn: boolean;
 }
 
+export interface ChatConversation {
+  id: string;
+  userId: string;
+  title: string;
+  appType: 'whatsapp' | 'gmail' | 'slack' | 'sms' | 'custom';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  sender: 'me' | 'other';
+  text: string;
+  originalText?: string;
+  sourceLang?: SupportedLanguage;
+  targetLang?: SupportedLanguage;
+  createdAt: string;
+}
+
 export interface FeedbackRequest {
   feature: 'translate' | 'reply' | 'rewrite' | 'grammar';
   rating: 'positive' | 'negative';
@@ -255,3 +275,4 @@ export interface ApiResponse<T> {
     details?: unknown;
   };
 }
+
