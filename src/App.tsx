@@ -122,6 +122,7 @@ export default function App() {
     label: string;
   }> | null>(null);
   const [isSelectedLoading, setIsSelectedLoading] = useState(false);
+  const [selectedReplyOptionId, setSelectedReplyOptionId] = useState<string | null>(null);
 
   // Client-side cache to eliminate redundant network calls
   const clientLiveTransCache = useRef<Map<string, string>>(new Map());
@@ -140,10 +141,10 @@ export default function App() {
 
   // Word Tone Floating Card & Bottom Toolbar (matching image.png)
   const [activeToolbarMode, setActiveToolbarMode] = useState<'wordTone' | 'grammar' | 'chatgpt' | 'translator' | null>('wordTone');
-  const [activeToneTab, setActiveToneTab] = useState<'rewrite' | 'professional' | 'casual' | 'polite' | 'formal' | 'persuasive' | 'short'>('professional');
+  const [activeToneTab, setActiveToneTab] = useState<'rewrite' | 'professional' | 'casual' | 'polite' | 'formal' | 'persuasive' | 'short'>('polite');
   const [toneVariations, setToneVariations] = useState<string[]>([
-    "I would like to formally apply for the Social Media Manager position.",
-    "I am eager to be considered for the Social Media Manager role."
+    "Could you please share the details with me at your earliest convenience?",
+    "Kindly review this when you have a moment, thank you."
   ]);
   const [isTonePanelOpen, setIsTonePanelOpen] = useState(true);
 
@@ -397,6 +398,19 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [inputText, autoTranslateEnabled, targetLang, sourceLang, hostApp]);
 
+  // Synchronize Word Tone variations whenever inputText changes and Word Tone filter panel is active
+  useEffect(() => {
+    if (!isTonePanelOpen && activeToolbarMode !== 'wordTone') return;
+    const trimmed = inputText.trim();
+    if (!trimmed || trimmed.length < 2) return;
+
+    const timer = setTimeout(() => {
+      handleToneTabSelect(activeToneTab, targetLang);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [inputText, activeToneTab, targetLang, isTonePanelOpen, activeToolbarMode]);
+
   // Detect language of incoming message
   const detectMessageLanguage = (text: string): SupportedLanguage => {
     if (!text || !text.trim()) return 'en';
@@ -433,12 +447,13 @@ export default function App() {
     setQuestionDetectedLang(qLang);
 
     // 2. Determine Answer Language:
-    // BY DEFAULT: answers strictly use the user's selected DEFAULT TARGET LANGUAGE (targetLang)
+    // USER REQUIREMENT: "or jo message select he usi language me uska anaswer kese dena he wo bhi mlum pade"
+    // By default: Answers are generated in the SAME LANGUAGE as the selected message (qLang)
     const activeReplyChoice = overrideReplyLang !== undefined ? overrideReplyLang : replyLangChoice;
-    const effectiveReplyLang: SupportedLanguage = activeReplyChoice === 'auto' ? (customTarget || targetLang) : activeReplyChoice;
+    const effectiveReplyLang: SupportedLanguage = activeReplyChoice === 'auto' ? qLang : activeReplyChoice;
     
-    // Translation target is the user's selected translation language (e.g. Hindi or English)
-    const activeTarget = customTarget || targetLang;
+    // Translation target: Default to Hindi ('hi') when question is English/other, or user's targetLang
+    const activeTarget: SupportedLanguage = customTarget || (targetLang === 'en' && qLang === 'en' ? 'hi' : targetLang);
     const msgCacheKey = `${msg.text.trim().toLowerCase()}_target_${activeTarget}_reply_${effectiveReplyLang}`;
 
     // Check client cache first
@@ -446,6 +461,9 @@ export default function App() {
       const cached = selectedMessageCache.current.get(msgCacheKey)!;
       setSelectedMsgTranslation(cached.translation);
       setSelectedMsgReplies(cached.replies);
+      if (cached.replies && cached.replies.length > 0) {
+        setSelectedReplyOptionId(cached.replies[0].id);
+      }
       setIsSelectedLoading(false);
       return;
     }
@@ -459,11 +477,11 @@ export default function App() {
           text: msg.text,
           sourceLanguage: 'auto',
           targetLanguage: activeTarget,
-          tone: 'natural'
+          tone: 'polite'
         })
       }).then(r => r.json());
 
-      // 2. Fetch contextual smart reply suggestions BY DEFAULT in question's language (effectiveReplyLang)
+      // 2. Fetch contextual smart reply suggestions in question's native language (effectiveReplyLang)
       const replyPromise = fetch('/api/v1/reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -471,7 +489,7 @@ export default function App() {
           incomingMessage: msg.text,
           draftMessage: inputText,
           targetLanguage: effectiveReplyLang,
-          tone: 'professional'
+          tone: 'polite'
         })
       }).then(r => r.json());
 
@@ -490,14 +508,17 @@ export default function App() {
 
       let repliesArr = null;
       if (replyData.success && replyData.data?.suggestions) {
-        const labels = ['Confirm / Agree', 'Alternative / Reschedule', 'Follow-up / Inquire'];
+        const labels = ['Yes / Confirm (हाँ / स्वीकृति)', 'No / Alternative (नहीं / विकल्प)', 'Check / Clarify (पुष्टि / संशय)'];
         repliesArr = replyData.data.suggestions.slice(0, 3).map((s: any, idx: number) => ({
           id: s.id || `rep-${idx}`,
           text: s.text,
-          tone: s.tone || 'professional',
-          label: labels[idx] || 'Smart Reply'
+          tone: s.tone || 'polite',
+          label: labels[idx] || 'Polite Reply'
         }));
         setSelectedMsgReplies(repliesArr);
+        if (repliesArr.length > 0) {
+          setSelectedReplyOptionId(repliesArr[0].id);
+        }
       }
 
       // Store in memory cache
@@ -511,6 +532,23 @@ export default function App() {
       // Safe fallback handled gracefully
     } finally {
       setIsSelectedLoading(false);
+    }
+  };
+
+  // Commit selected reply to active message box with Done confirmation
+  const handleCommitSelectedReplyToMessageBox = (customText?: string) => {
+    const chosen = customText || selectedMsgReplies?.find(r => r.id === selectedReplyOptionId)?.text || selectedMsgReplies?.[0]?.text;
+    if (!chosen) return;
+    setUndoSnapshot({ original: inputText, replaced: chosen });
+    setInputText(chosen);
+    setCursorPos(chosen.length);
+    triggerHaptic();
+
+    const activeLang = replyLangChoice === 'auto' ? questionDetectedLang : replyLangChoice;
+    const langName = AVAILABLE_LANGUAGES.find(l => l.code === activeLang)?.name || activeLang.toUpperCase();
+    setActiveNotice(`✓ Done: Polite reply in ${langName} inserted into message box! You can now send or edit.`);
+    if (inputRef.current) {
+      inputRef.current.focus();
     }
   };
 
@@ -2060,41 +2098,63 @@ export default function App() {
 
                         {/* "Kese Answer De Sakte Ho" - Smart Suggested Answers */}
                         {selectedMsgReplies && selectedMsgReplies.length > 0 && (
-                          <div className="space-y-1.5">
+                          <div className="space-y-2">
                             <div className="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
-                              <span className="flex items-center gap-1">
-                                <Bot className="w-3 h-3 text-indigo-400" />
-                                💡 Kese Answer De Sakte Ho ({replyLangChoice === 'auto' ? `In Question Lang: ${AVAILABLE_LANGUAGES.find(l => l.code === questionDetectedLang)?.name || questionDetectedLang.toUpperCase()}` : AVAILABLE_LANGUAGES.find(l => l.code === replyLangChoice)?.name || replyLangChoice.toUpperCase()}):
+                              <span className="flex items-center gap-1.5">
+                                <Bot className="w-3.5 h-3.5 text-emerald-400" />
+                                <strong className="text-white">💡 Kese Answer De Sakte Ho ({replyLangChoice === 'auto' ? `In Question Lang: ${AVAILABLE_LANGUAGES.find(l => l.code === questionDetectedLang)?.name || questionDetectedLang.toUpperCase()}` : AVAILABLE_LANGUAGES.find(l => l.code === replyLangChoice)?.name || replyLangChoice.toUpperCase()}):</strong>
                               </span>
-                              <span className="text-[9px] text-slate-500">Tap to insert & send</span>
+                              <span className="text-[9px] text-emerald-400 font-medium">Select & tap Done</span>
                             </div>
-                            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-0.5">
-                              {selectedMsgReplies.map((reply, idx) => (
-                                <button
-                                  key={reply.id}
-                                  onClick={() => {
-                                    setUndoSnapshot({ original: inputText, replaced: reply.text });
-                                    setInputText(reply.text);
-                                    setCursorPos(reply.text.length);
-                                    const effectiveLang = replyLangChoice === 'auto' ? questionDetectedLang : replyLangChoice;
-                                    setActiveNotice(`Answer inserted in ${effectiveLang.toUpperCase()}! Tap Send to deliver.`);
-                                  }}
-                                  className="w-full text-left p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 transition group flex items-start justify-between gap-2 shadow-sm"
-                                >
-                                  <div className="flex-1">
-                                    <span className="text-[10px] font-bold text-indigo-300 block mb-0.5">
-                                      Option {idx + 1}: {reply.label}
-                                    </span>
-                                    <p className="text-xs text-slate-200 group-hover:text-white leading-snug">
-                                      {reply.text}
-                                    </p>
+                            <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+                              {selectedMsgReplies.map((reply, idx) => {
+                                const isSelected = selectedReplyOptionId === reply.id;
+                                return (
+                                  <div
+                                    key={reply.id}
+                                    onClick={() => setSelectedReplyOptionId(reply.id)}
+                                    className={`w-full text-left p-2.5 rounded-xl border transition cursor-pointer flex items-start gap-2 shadow-sm ${
+                                      isSelected
+                                        ? 'bg-emerald-950/50 border-emerald-500 ring-2 ring-emerald-500/50 text-white'
+                                        : 'bg-slate-800/80 hover:bg-slate-700/80 border-slate-700/60 text-slate-200'
+                                    }`}
+                                  >
+                                    <div className="pt-0.5">
+                                      {isSelected ? (
+                                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                                      ) : (
+                                        <div className="w-4 h-4 rounded-full border-2 border-slate-500 shrink-0" />
+                                      )}
+                                    </div>
+                                    <div className="flex-1">
+                                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                                        <span className={`text-[10px] font-bold ${isSelected ? 'text-emerald-300' : 'text-indigo-300'}`}>
+                                          Option {idx + 1}: {reply.label}
+                                        </span>
+                                        {isSelected && (
+                                          <span className="text-[9px] bg-emerald-600 text-white px-1.5 py-0.5 rounded-full font-bold">
+                                            ✓ Selected
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-xs leading-snug">
+                                        {reply.text}
+                                      </p>
+                                    </div>
                                   </div>
-                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-medium shrink-0 mt-0.5">
-                                    Use ➔
-                                  </span>
-                                </button>
-                              ))}
+                                );
+                              })}
                             </div>
+
+                            {/* DEDICATED DONE BUTTON (Fulfills: "or use select akru or done karu to wo message box me aa jaye") */}
+                            <button
+                              id="done-insert-reply-btn"
+                              onClick={() => handleCommitSelectedReplyToMessageBox()}
+                              className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/60 transition active:scale-[0.98]"
+                            >
+                              <Check className="w-4 h-4 text-emerald-200" />
+                              <span>✓ Done - Insert into Message Box (मैसेज बॉक्स में डालें)</span>
+                            </button>
                           </div>
                         )}
                       </>

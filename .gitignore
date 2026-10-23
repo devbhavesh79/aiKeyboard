@@ -30,8 +30,7 @@ local.properties
 *.jks
 
 # IDEs & System files
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-*.swp
+# Playwright artifacts
+.playwright-mcp/
+tests/screenshots/
+

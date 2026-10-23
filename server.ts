@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { geminiService } from './backend/services/gemini.service';
+import { multiLLMService } from './backend/services/multi-llm.service';
 import { storeService } from './backend/services/store.service';
 import { dictionaryService } from './backend/services/dictionary.service';
 import { rateLimiterService } from './backend/services/rate-limiter.service';
@@ -74,10 +75,18 @@ app.get('/ready', (req: Request, res: Response) => {
 
 // --- VERSIONED API (Section 73, 74) ---
 
+// GET /api/v1/providers (Multi-LLM Status)
+app.get('/api/v1/providers', (req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    data: multiLLMService.getProviderStatus()
+  });
+});
+
 // POST /api/v1/translate
 app.post('/api/v1/translate', async (req: Request, res: Response) => {
   const start = Date.now();
-  const { text, sourceLanguage = 'auto', targetLanguage = 'en', tone = 'natural', userId = 'default' } = req.body;
+  const { text, sourceLanguage = 'auto', targetLanguage = 'en', tone = 'polite', userId = 'default' } = req.body;
 
   if (!text || typeof text !== 'string') {
     return res.status(400).json({
@@ -138,7 +147,7 @@ app.post('/api/v1/translate', async (req: Request, res: Response) => {
 // POST /api/v1/reply
 app.post('/api/v1/reply', async (req: Request, res: Response) => {
   const start = Date.now();
-  const { incomingMessage, draftMessage = '', intent, tone, length, targetLanguage, userId = 'default' } = req.body;
+  const { incomingMessage, draftMessage = '', intent, tone = 'polite', length, targetLanguage, userId = 'default' } = req.body;
 
   if (!incomingMessage || typeof incomingMessage !== 'string') {
     return res.status(400).json({

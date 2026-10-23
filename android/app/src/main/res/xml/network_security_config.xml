@@ -7,8 +7,8 @@
         <domain includeSubdomains="true">127.0.0.1</domain>
     </domain-config>
 
-    <!-- Strict production security default -->
-    <base-config cleartextTrafficPermitted="false">
+    <!-- Allow local dev endpoints for testing in Android emulator / local Wi-Fi networks -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

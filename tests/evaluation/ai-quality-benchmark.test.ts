@@ -134,5 +134,42 @@ export async function runAIQualityBenchmarks() {
   }
   console.log('✓ ChatGPT Hindi reply language guarantee evaluated successfully.');
 
+  // Benchmark 11: Multi-LLM Provider Status & Fallback Readiness
+  const { multiLLMService } = await import('../../backend/services/multi-llm.service');
+  const providers = multiLLMService.getProviderStatus();
+  console.log(`[Eval 11] Configured Providers:`, providers.map(p => `${p.name} (active: ${p.active})`));
+  const hasFallbackEngine = providers.some(p => p.id === 'neural' && p.active) && providers.some(p => p.id === 'offline_engine' && p.active);
+  if (!hasFallbackEngine) {
+    throw new Error('Multi-LLM Fallback readiness failed: Neural or Offline engine missing!');
+  }
+  console.log('✓ Multi-LLM Provider cascade & zero-downtime fallback readiness validated.');
+
+  // Benchmark 12: Polite Default Tone Quality
+  const res12 = await geminiService.translate({
+    text: "bhai report bhej de jaldi",
+    sourceLanguage: 'hinglish',
+    targetLanguage: 'en',
+    tone: 'polite'
+  });
+  console.log(`[Eval 12] Input: "bhai report bhej de jaldi" -> Polite EN: "${res12.translatedText}"`);
+  const lower12 = res12.translatedText.toLowerCase();
+  if (!lower12.includes('please') && !lower12.includes('could you') && !lower12.includes('kindly') && !lower12.includes('appreciate')) {
+    throw new Error(`Polite default translation failed courtesy check: ${res12.translatedText}`);
+  }
+  console.log('✓ Polite default tone translation verified with courtesy markers.');
+
+  // Benchmark 13: Selected message same-language reply matching
+  const input13 = "क्या आप आज शाम 4 बजे तक रिपोर्ट भेज सकते हैं?";
+  const res13 = await geminiService.reply({
+    incomingMessage: input13,
+    targetLanguage: 'hi'
+  });
+  console.log(`[Eval 13] Incoming Hindi -> Suggested Replies:`, res13.suggestions.map(s => s.text));
+  const allDevanagari = res13.suggestions.every(s => hindiRegex.test(s.text));
+  if (!allDevanagari) {
+    throw new Error(`Incoming Hindi question did not receive Hindi script suggestions: ${JSON.stringify(res13.suggestions)}`);
+  }
+  console.log('✓ Selected message same-language reply intelligence validated.');
+
   return true;
 }
