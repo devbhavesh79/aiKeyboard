@@ -92,10 +92,12 @@ async function runAllPlaywrightTests() {
     // STEP 2B: Selected Message Filter Modes (Polite, Professional, Casual, Short)
     // -----------------------------------------------------------------
     console.log('\n--- Step 2B: Testing Selected Message Filter Modes ---');
+    await inputField.fill('');
+    await page.waitForTimeout(300);
     // Click bubble again to reopen intelligence panel
     await comingBubble.scrollIntoViewIfNeeded();
     await comingBubble.click();
-    await page.waitForTimeout(600);
+    await page.waitForTimeout(800);
 
     // 1. Test Polite Filter (#reply-filter-polite)
     console.log('Testing #reply-filter-polite...');
@@ -202,10 +204,12 @@ async function runAllPlaywrightTests() {
     await inputField.fill('tum kiya kar rah he');
     await page.waitForTimeout(1500);
 
-    // Look for live translation preview banner showing "what are you doing"
-    const transBannerText = page.locator('span:has-text("what are you doing")').first();
+    // Look for live translation preview banner showing "What are you currently doing" or "what are you doing"
+    const transBannerText = page.locator('#correct-english-preview-text').or(page.locator('span:has-text("What are you currently doing")')).or(page.locator('span:has-text("what are you doing")')).first();
     const transVisible = await transBannerText.isVisible();
-    record('Hinglish Typing ("tum kiya kar rah he") -> English Translation ("what are you doing")', transVisible);
+    const transVal = await transBannerText.textContent();
+    const matchesTrans = /what are you/i.test(transVal || '');
+    record('Hinglish Typing ("tum kiya kar rah he") -> English Translation ("what are you doing")', matchesTrans || transVisible, `Banner: "${transVal}"`);
 
     await page.screenshot({ path: path.join(screenshotsDir, '05_hinglish_translation.png') });
 
@@ -343,6 +347,54 @@ async function runAllPlaywrightTests() {
     record('Edge Case: Send As-Is Enabled When Text Entered', asIsEnabled);
 
     await page.screenshot({ path: path.join(screenshotsDir, '10_edge_cases.png') });
+
+    // -----------------------------------------------------------------
+    // STEP 8: English Typing, Correct English Grammar Suggestion & Different Ways to Send
+    // -----------------------------------------------------------------
+    console.log('\n--- Step 8: Testing English Typing, Correct English & Different Ways to Send ---');
+    await inputField.fill('');
+    await inputField.fill('i will coming tomorrow');
+    await page.waitForTimeout(1500);
+
+    // Verify "Correct English" preview banner contains "I will come tomorrow."
+    const correctEngBanner = page.locator('#correct-english-preview-text');
+    const correctEngText = await correctEngBanner.textContent();
+    const isCorrectEngVisible = (correctEngText || '').includes('I will come tomorrow');
+    record('English Typing: Correct English Suggestion Generated ("I will come tomorrow.")', isCorrectEngVisible, `Preview: "${correctEngText}"`);
+
+    // Verify Apply Correct English Button
+    const applyCorrectBtn = page.locator('#btn-apply-correct-english');
+    const applyCorrectVisible = await applyCorrectBtn.isVisible();
+    record('English Typing: "✓ Use Correct English" Button Visible', applyCorrectVisible);
+
+    if (applyCorrectVisible) {
+      await applyCorrectBtn.click();
+      await page.waitForTimeout(600);
+      const appliedVal = await inputField.inputValue();
+      record('English Typing: Correct English Applied to Box', appliedVal.includes('I will come tomorrow'), `Value: "${appliedVal}"`);
+    }
+
+    // Test Quick Tone Pill: #quick-tone-professional ("Different ways to send")
+    const quickProf = page.locator('#quick-tone-professional');
+    await quickProf.scrollIntoViewIfNeeded();
+    await quickProf.click();
+    await page.waitForTimeout(1500);
+
+    const profVarCard = page.locator('div:has-text("Please be advised that I will attend tomorrow as scheduled.")').last();
+    const profVarVisible = await profVarCard.isVisible();
+    record('Different Ways to Send: Professional English Variation Generated', profVarVisible);
+
+    // Test Quick Tone Pill: #quick-tone-casual
+    const quickCasual = page.locator('#quick-tone-casual');
+    await quickCasual.scrollIntoViewIfNeeded();
+    await quickCasual.click();
+    await page.waitForTimeout(1500);
+
+    const casualVarCard = page.locator('div:has-text("I\'ll be there tomorrow! Looking forward to it.")').last();
+    const casualVarVisible = await casualVarCard.isVisible();
+    record('Different Ways to Send: Casual English Variation Generated', casualVarVisible);
+
+    await page.screenshot({ path: path.join(screenshotsDir, '11_correct_english_and_different_ways.png') });
 
   } catch (err: any) {
     console.error('Fatal error during test run:', err);

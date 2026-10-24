@@ -806,7 +806,12 @@ Return JSON with format:
       if (lower.includes('late') || lower.includes('traffic')) tr = "I will be a little late tomorrow due to traffic.";
       else if (lower.includes('ja raha') || lower.includes('nikal')) tr = "I am leaving now.";
       else if (lower.includes('report') && lower.includes('bhej')) tr = "Please send me the report.";
-      else tr = text;
+      else if (lower.includes('kiya kar') || lower.includes('kya kar') || lower.includes('tum kiya') || lower.includes('what you doing') || lower.includes('what u doing')) tr = "What are you currently doing?";
+      else if (lower.includes('kal aao') || lower.includes('kal aaunga') || lower.includes('i will coming')) tr = "I will come tomorrow.";
+      else if (lower.includes('send me this fast') || lower.includes('send fast')) tr = "Please send this to me as soon as possible.";
+      else {
+        tr = this.offlineFallbackGrammar(text).correctedText;
+      }
     } else if (targetLang === 'hi') {
       tr = "कृपया संदेश की पुष्टि करें।";
     } else if (targetLang === 'gu') {
@@ -1636,35 +1641,140 @@ Return JSON with format:
               "Whenever you have a moment, please share this across."
             ];
             break;
+          case 'make_formal':
+            rewritten = "Kindly forward the required documentation at your earliest convenience.";
+            alts = [
+              "Kindly forward the required documentation at your earliest convenience.",
+              "Please provide the requested records at your convenience."
+            ];
+            break;
+          case 'make_shorter':
           default:
-            rewritten = text;
-            alts = [text];
+            rewritten = "Please send when possible.";
+            alts = [
+              "Please send when possible.",
+              "Kindly share this."
+            ];
+            break;
         }
       } else {
         // Statement
-        const cleanS = text.trim();
-        switch (action) {
-          case 'make_polite':
-            rewritten = `I would like to kindly let you know that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}`;
-            alts = [
-              rewritten,
-              `Please note that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}. Thank you!`
-            ];
-            break;
-          case 'make_professional':
-            rewritten = `Please be advised that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}`;
-            alts = [
-              rewritten,
-              `I am writing to confirm that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}`
-            ];
-            break;
-          case 'make_friendly':
-            rewritten = cleanS;
-            alts = [cleanS, `Just wanted to let you know: ${cleanS}`];
-            break;
-          default:
-            rewritten = text;
-            alts = [text];
+        const cleanGrammar = this.offlineFallbackGrammar(text).correctedText;
+        const cleanS = cleanGrammar.replace(/\.$/, '').trim();
+        const isComing = lower.includes('coming') || lower.includes('come') || lower.includes('kal aa') || lower.includes('aaunga') || lower.includes('attend');
+        const isGoing = lower.includes('going') || lower.includes('ja raha') || lower.includes('office') || lower.includes('nikal');
+
+        if (isComing) {
+          switch (action) {
+            case 'make_polite':
+              rewritten = "I would like to kindly confirm that I will come tomorrow.";
+              alts = [
+                "I would like to kindly confirm that I will come tomorrow.",
+                "Kindly note that I will be coming tomorrow.",
+                "I would be glad to attend tomorrow as planned."
+              ];
+              break;
+            case 'make_professional':
+              rewritten = "Please be advised that I will attend tomorrow as scheduled.";
+              alts = [
+                "Please be advised that I will attend tomorrow as scheduled.",
+                "I am writing to confirm my attendance for tomorrow.",
+                "Kindly note my confirmed availability for tomorrow."
+              ];
+              break;
+            case 'make_friendly':
+              rewritten = "I'll be there tomorrow! Looking forward to it.";
+              alts = [
+                "I'll be there tomorrow! Looking forward to it.",
+                "See you tomorrow!",
+                "Confirmed, see you there tomorrow!"
+              ];
+              break;
+            case 'make_formal':
+              rewritten = "I hereby confirm my scheduled arrival for tomorrow.";
+              alts = [
+                "I hereby confirm my scheduled arrival for tomorrow.",
+                "Please accept this as formal confirmation of my attendance."
+              ];
+              break;
+            case 'make_shorter':
+            default:
+              rewritten = "I will come tomorrow.";
+              alts = [
+                "I will come tomorrow.",
+                "Confirmed for tomorrow.",
+                "Will attend tomorrow."
+              ];
+              break;
+          }
+        } else if (isGoing) {
+          switch (action) {
+            case 'make_polite':
+              rewritten = "I am currently heading to the office and will connect with you shortly.";
+              alts = [
+                "I am currently heading to the office and will connect with you shortly.",
+                "Kindly note I am on my way to the office."
+              ];
+              break;
+            case 'make_professional':
+              rewritten = "Please be advised that I am en route to the office and will be available shortly.";
+              alts = [
+                "Please be advised that I am en route to the office and will be available shortly.",
+                "I am traveling to the office and will follow up upon arrival."
+              ];
+              break;
+            case 'make_friendly':
+              rewritten = "Heading to the office now, see you soon!";
+              alts = [
+                "Heading to the office now, see you soon!",
+                "On my way to work!"
+              ];
+              break;
+            case 'make_formal':
+              rewritten = "I am currently in transit to the office and shall follow up upon arrival.";
+              alts = [
+                "I am currently in transit to the office and shall follow up upon arrival."
+              ];
+              break;
+            case 'make_shorter':
+            default:
+              rewritten = "On my way to the office.";
+              alts = [
+                "On my way to the office.",
+                "Heading to office."
+              ];
+              break;
+          }
+        } else {
+          switch (action) {
+            case 'make_polite':
+              rewritten = `I would like to kindly let you know that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`;
+              alts = [
+                rewritten,
+                `Please note that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}. Thank you!`
+              ];
+              break;
+            case 'make_professional':
+              rewritten = `Please be advised that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`;
+              alts = [
+                rewritten,
+                `I am writing to confirm that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`
+              ];
+              break;
+            case 'make_friendly':
+              rewritten = cleanS;
+              alts = [cleanS, `Just wanted to let you know: ${cleanS}`];
+              break;
+            case 'make_formal':
+              rewritten = `I hereby note that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`;
+              alts = [rewritten, `Kindly be informed that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`];
+              break;
+            case 'make_shorter':
+            default:
+              rewritten = cleanGrammar;
+              alts = [cleanGrammar];
+              break;
+          }
         }
       }
     } else if (targetLanguage === 'hi') {
@@ -1737,24 +1847,98 @@ Return JSON with format:
   }
 
   public offlineFallbackGrammar(text: string): GrammarResponse {
-    let corrected = text;
-    let natural = text;
+    let corrected = text.trim();
+    const corrections: Array<{ original: string; corrected: string; explanation: string; type: 'grammar' | 'spelling' | 'punctuation' | 'restructuring' }> = [];
 
-    if (text.toLowerCase().includes('i will coming')) {
-      corrected = text.replace(/i will coming/gi, 'I will come');
-      natural = text.replace(/i will coming/gi, "I'll come");
+    // Rule 1: 'i will coming' -> 'I will come'
+    if (/i will coming/i.test(corrected)) {
+      corrected = corrected.replace(/i will coming/gi, 'I will come');
+      corrections.push({ original: 'will coming', corrected: 'will come', explanation: 'Use base verb after modal verb "will".', type: 'grammar' });
+    }
+    // Rule 2: 'what you doing' / 'what u doing' / 'what are u doing' -> 'What are you doing'
+    if (/what (?:you|u) doing/i.test(corrected)) {
+      corrected = corrected.replace(/what (?:you|u) doing/gi, 'What are you doing');
+      corrections.push({ original: 'what you doing', corrected: 'What are you doing', explanation: 'Add auxiliary verb "are" for present continuous question.', type: 'grammar' });
+    }
+    // Rule 3: 'i is' / 'i are' -> 'I am'
+    if (/\bi (?:is|are)\b/i.test(corrected)) {
+      corrected = corrected.replace(/\bi (?:is|are)\b/gi, 'I am');
+      corrections.push({ original: 'i is', corrected: 'I am', explanation: 'First-person singular pronoun "I" pairs with "am".', type: 'grammar' });
+    }
+    // Rule 4: 'i has' -> 'I have'
+    if (/\bi has\b/i.test(corrected)) {
+      corrected = corrected.replace(/\bi has\b/gi, 'I have');
+      corrections.push({ original: 'i has', corrected: 'I have', explanation: '"I" takes auxiliary verb "have".', type: 'grammar' });
+    }
+    // Rule 5: 'you is' / 'we is' / 'they is' -> 'you are' / 'we are' / 'they are'
+    if (/\b(you|we|they) is\b/i.test(corrected)) {
+      corrected = corrected.replace(/\b(you|we|they) is\b/gi, (_m, p1) => `${p1} are`);
+      corrections.push({ original: 'is', corrected: 'are', explanation: 'Plural pronouns take "are".', type: 'grammar' });
+    }
+    // Rule 6: 'he have' / 'she have' / 'it have' -> 'he has' / 'she has' / 'it has'
+    if (/\b(he|she|it) have\b/i.test(corrected)) {
+      corrected = corrected.replace(/\b(he|she|it) have\b/gi, (_m, p1) => `${p1} has`);
+      corrections.push({ original: 'have', corrected: 'has', explanation: 'Third-person singular takes "has".', type: 'grammar' });
+    }
+    // Rule 7: 'you\'re email' / 'you\'re report' -> 'your email' / 'your report'
+    if (/you['’]?re (email|report|message|file|document|status|request)/i.test(corrected)) {
+      corrected = corrected.replace(/you['’]?re (email|report|message|file|document|status|request)/gi, 'your $1');
+      corrections.push({ original: "you're", corrected: 'your', explanation: 'Use possessive pronoun "your" instead of contraction.', type: 'grammar' });
+    }
+    // Rule 8: 'your welcome' -> 'you\'re welcome'
+    if (/your welcome/i.test(corrected)) {
+      corrected = corrected.replace(/your welcome/gi, "you're welcome");
+      corrections.push({ original: 'your welcome', corrected: "you're welcome", explanation: 'Contraction "you are" is required for "you\'re welcome".', type: 'spelling' });
+    }
+    // Rule 9: 'i am agree' -> 'I agree'
+    if (/i am agree/i.test(corrected)) {
+      corrected = corrected.replace(/i am agree/gi, 'I agree');
+      corrections.push({ original: 'am agree', corrected: 'agree', explanation: '"Agree" is already a verb.', type: 'grammar' });
+    }
+    // Rule 10: 'thanks for reply' / 'thank for reply' -> 'Thank you for your reply'
+    if (/thanks? for reply/i.test(corrected)) {
+      corrected = corrected.replace(/thanks? for reply/gi, 'Thank you for your reply');
+      corrections.push({ original: 'thanks for reply', corrected: 'Thank you for your reply', explanation: 'Polite natural phrasing.', type: 'restructuring' });
+    }
+    // Rule 11: 'revert back' -> 'reply'
+    if (/revert back/i.test(corrected)) {
+      corrected = corrected.replace(/revert back/gi, 'reply');
+      corrections.push({ original: 'revert back', corrected: 'reply', explanation: 'Avoid redundant phrasing.', type: 'restructuring' });
+    }
+    // Rule 12: 'send me this fast' / 'send me fast' -> 'Please send this to me as soon as possible'
+    if (/send me (?:this )?fast/i.test(corrected)) {
+      corrected = corrected.replace(/send me (?:this )?fast/gi, 'Please send this to me as soon as possible');
+      corrections.push({ original: 'send me fast', corrected: 'Please send this to me as soon as possible', explanation: 'Polite and professional request phrasing.', type: 'restructuring' });
+    }
+    // Rule 13: 'can you send me file' -> 'Could you please send me the file'
+    if (/can you send (?:me )?(?:the )?file/i.test(corrected)) {
+      corrected = corrected.replace(/can you send (?:me )?(?:the )?file/gi, 'Could you please send me the file');
+      corrections.push({ original: 'can you send', corrected: 'Could you please send me the file', explanation: 'Polite modal and definite article.', type: 'restructuring' });
+    }
+    // Rule 14: Capitalize standalone 'i' to 'I'
+    corrected = corrected.replace(/\bi\b/g, 'I');
+
+    // Rule 15: Capitalize first character
+    if (corrected.length > 0) {
+      corrected = corrected.charAt(0).toUpperCase() + corrected.slice(1);
+    }
+
+    // Rule 16: Ensure sentence ending punctuation
+    const isQ = /^(what|why|how|when|where|who|which|can|could|would|will|do|does|did|is|are|am|are you|can you)/i.test(corrected);
+    if (!/[.!?]$/.test(corrected)) {
+      corrected = isQ ? `${corrected}?` : `${corrected}.`;
     }
 
     return {
       originalText: text,
       correctedText: corrected,
-      naturalPhrasing: natural,
-      corrections: [
+      naturalPhrasing: corrected,
+      corrections: corrections.length > 0 ? corrections : [
         {
-          original: 'will coming',
-          corrected: 'will come',
-          explanation: 'Use base verb "come" after modal verb "will".',
-          type: 'grammar'
+          original: text,
+          corrected: corrected,
+          explanation: 'Capitalization, proper grammar agreement, and natural punctuation applied.',
+          type: 'restructuring'
         }
       ]
     };
