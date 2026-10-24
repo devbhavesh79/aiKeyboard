@@ -458,7 +458,7 @@ export class MultiLLMService {
             model: 'openai',
             jsonMode: true
           }),
-          signal: AbortSignal.timeout(6000)
+          signal: AbortSignal.timeout(12000)
         });
         if (res.ok) {
           const raw = await res.text();
@@ -472,7 +472,7 @@ export class MultiLLMService {
           return { data: parsed, providerUsed: 'openai-gpt (via cloud neural)' };
         }
       } catch (err: any) {
-        this.setCooldown('pollinations', 15000);
+        this.setCooldown('pollinations', 5000);
       }
     }
 
@@ -509,18 +509,27 @@ export class MultiLLMService {
     const targetLangLabel = langNames[targetLanguage] || targetLanguage;
 
     const systemInstruction = `
-You are AI KeyBoard's Multilingual Neural Translation & Rewriting Engine.
+You are AI KeyBoard's Multilingual Neural Translation, Grammar Correction & Rewriting Engine.
 CRITICAL RULES:
 1. MANDATORY TARGET LANGUAGE: The output "translatedText" and ALL "alternatives" MUST be written in ${targetLangLabel} (Language Code: ${targetLanguage}).
    - If targetLanguage is 'hi', write in natural Hindi using Devanagari script (e.g. 'क्या आप आज आवेदन जमा कर सकते हैं?').
    - If targetLanguage is 'gu', write in natural Gujarati using Gujarati script.
    - If targetLanguage is 'mr', write in natural Marathi script.
-   - If targetLanguage is 'en', write in natural, modern, fluent English.
+   - If targetLanguage is 'en', write in natural, modern, fluent, grammatically correct English.
 2. BY DEFAULT POLITE & RESPECTFUL: Ensure the translation is courteous and polite (using respectful address: "आप", "कृपया", "Could you kindly...", "Please..."). Never return blunt or literal broken translations.
-3. Understand real-world transliterated input like Hinglish ("main kal thoda late aaunga traffic bahut hai" -> "I may be arriving a bit late tomorrow due to heavy traffic.", "me ja raha hu" -> "I am heading out now; thank you.", "bhai file bhej do" -> "Could you please share the file with me?").
-4. Preserve exact entity placeholders like __PROTECTED_ENTITY_0__ unchanged.
-5. Preserve numbers, dates, times, currencies, and emojis.
-6. Return structured JSON with keys: "translatedText", "detectedSourceLanguage", "confidence", "alternatives".
+3. GRAMMAR, SYNTAX & WORD ORDER REPAIR: If the input text is in English (or target is English) and contains ANY grammatical errors, wrong word order, awkward phrasing, or spelling mistakes (e.g. "are you who?", "me i go", "i will coming tomorrow", "where you going", "why you not come", "what your name", "you is", "i has"):
+   - You MUST fix the sentence structure and word order into proper English:
+     * "are you who?" -> "Who are you?" (alternatives: "May I ask who this is?", "Could you please tell me who you are?", "May I know who is speaking?")
+     * "i will coming tomorrow" -> "I will come tomorrow."
+     * "me i go" -> "May I go?" (alternatives: "Could I please leave now?", "May I be excused?")
+     * "where you going" -> "Where are you going?"
+     * "why you not come" -> "Why didn't you come?"
+     * "what your name" -> "What is your name?"
+   - NEVER echo or preserve broken word order or ungrammatical phrasing.
+4. Understand real-world transliterated input like Hinglish ("main kal thoda late aaunga traffic bahut hai" -> "I may be arriving a bit late tomorrow due to heavy traffic.", "me ja raha hu" -> "I am heading out now; thank you.", "bhai file bhej do" -> "Could you please share the file with me?").
+5. Preserve exact entity placeholders like __PROTECTED_ENTITY_0__ unchanged.
+6. Preserve numbers, dates, times, currencies, and emojis.
+7. Return structured JSON with keys: "translatedText", "detectedSourceLanguage", "confidence", "alternatives".
 `;
 
     try {
@@ -684,14 +693,17 @@ CRITICAL SAFETY & QUALITY RULES:
     const targetLangLabel = langNames[targetLanguage] || targetLanguage;
 
     const systemInstruction = `
-You are AI KeyBoard's Rewrite and Tone Assistant.
+You are AI KeyBoard's Rewrite, Tone & Grammar Assistant.
 Action: ${action}.
 Mandatory Target Language: ${targetLangLabel} (Language Code: ${targetLanguage}).
 CRITICAL RULES:
 1. MANDATORY TARGET LANGUAGE: The output "rewrittenText" and ALL "alternatives" MUST be written in ${targetLangLabel}.
-2. If the user's input text is in Hinglish (e.g. "me ja raha hu", "kal milte hai", "thoda late ho jaunga"), FIRST translate the core meaning into ${targetLangLabel}, and THEN apply the requested tone (${action}).
-3. Always ensure the output is courteous, respectful, and articulate.
-4. Return JSON with keys: "originalText", "rewrittenText", "alternatives", "explanation".
+2. FIRST FIX ALL GRAMMAR & BROKEN ENGLISH: If the input text has ANY incorrect grammar, wrong word order, or broken English (e.g. "are you who?", "me i go", "why you not come", "where you going", "what your name", "you is", "i has"):
+   - You MUST FIRST fix the sentence into proper, correct English (e.g. "are you who?" -> "Who are you?"), and THEN generate polite, professional, casual, or short variations based on ${action}!
+   - NEVER output or repeat broken grammar or inverted word order like "Are you who?".
+3. If the user's input text is in Hinglish (e.g. "me ja raha hu", "kal milte hai", "thoda late ho jaunga"), FIRST translate the core meaning into ${targetLangLabel}, and THEN apply the requested tone (${action}).
+4. Always ensure the output is courteous, respectful, and articulate.
+5. Return JSON with keys: "originalText", "rewrittenText", "alternatives", "explanation".
 `;
 
     try {
@@ -868,7 +880,19 @@ Return JSON with format:
     // Default polite translation fallback
     let tr = text;
     if (targetLang === 'en') {
-      if (/\b(nam|naam|name)\b/i.test(lower) && /\b(tumhara|aapka|apka|tera|your|kya|kiya|what|batao)\b/i.test(lower)) {
+      if (/^(?:are you who|you who|who you|who are u)\??$/i.test(lower)) {
+        tr = "Who are you?";
+      } else if (/^where (?:you|u) (?:go|going)\??$/i.test(lower)) {
+        tr = "Where are you going?";
+      } else if (/^why (?:you|u) (?:not come|no come)\??$/i.test(lower)) {
+        tr = "Why didn't you come?";
+      } else if (/^(?:what your name|ur name what|what is u name)\??$/i.test(lower)) {
+        tr = "What is your name?";
+      } else if (/^when (?:you|u) (?:come|coming)\??$/i.test(lower)) {
+        tr = "When are you coming?";
+      } else if (/^how (?:you|u) (?:are|do)\??$/i.test(lower)) {
+        tr = "How are you?";
+      } else if (/\b(nam|naam|name)\b/i.test(lower) && /\b(tumhara|aapka|apka|tera|your|kya|kiya|what|batao)\b/i.test(lower)) {
         tr = "What is your name?";
       } else if (/\b(kaise|kese)\b/i.test(lower) && /\b(ho|hai|aap|tum)\b/i.test(lower)) {
         tr = "How are you?";
@@ -1684,7 +1708,55 @@ Return JSON with format:
             break;
         }
       } else if (isQuestion) {
-        if (isName) {
+        if (/^(?:are you who|you who|who you|who are you|who is this|who are u)\??$/i.test(lower)) {
+          switch (action) {
+            case 'make_polite':
+              rewritten = "Could you please let me know who you are?";
+              alts = [
+                "Could you please let me know who you are?",
+                "May I kindly ask who is speaking, please?",
+                "Would you mind introducing yourself?",
+                "May I ask who I have the pleasure of speaking with?"
+              ];
+              break;
+            case 'make_professional':
+              rewritten = "May I inquire who is contacting me?";
+              alts = [
+                "May I inquire who is contacting me?",
+                "Could you please provide your name and affiliation for official records?",
+                "Please state your name and the purpose of your communication.",
+                "Kindly advise who is reaching out so I may assist you appropriately."
+              ];
+              break;
+            case 'make_friendly':
+              rewritten = "Hey, who is this?";
+              alts = [
+                "Hey, who is this?",
+                "Who's this? Nice to connect!",
+                "Who are you? Hope you're doing well!",
+                "Hey there! Mind telling me who this is?"
+              ];
+              break;
+            case 'make_formal':
+              rewritten = "I respectfully request clarification regarding your identity.";
+              alts = [
+                "I respectfully request clarification regarding your identity.",
+                "May I be informed as to who is reaching out?",
+                "Please formally state your identity for official records."
+              ];
+              break;
+            case 'make_shorter':
+            default:
+              rewritten = "Who are you?";
+              alts = [
+                "Who are you?",
+                "Who is this?",
+                "May I ask who this is?",
+                "Who's speaking?"
+              ];
+              break;
+          }
+        } else if (isName) {
           switch (action) {
             case 'make_polite':
               rewritten = "Could you please tell me your name?";
@@ -2186,6 +2258,50 @@ Return JSON with format:
         originalText: text,
         correctedText: 'May I go?',
         naturalPhrasing: 'May I please leave now?',
+        corrections
+      };
+    }
+    // Rule 1C: 'are you who' / 'you who' / 'who you' -> 'Who are you?'
+    if (/^(?:are you who|you who|who you|who are u)\??$/i.test(corrected)) {
+      corrected = 'Who are you?';
+      corrections.push({ original: text, corrected: 'Who are you?', explanation: 'Correct interrogative pronoun and subject-verb order.', type: 'grammar' });
+      return {
+        originalText: text,
+        correctedText: 'Who are you?',
+        naturalPhrasing: 'May I ask who you are?',
+        corrections
+      };
+    }
+    // Rule 1D: 'where you go' / 'where you going' -> 'Where are you going?'
+    if (/^where (?:you|u) (?:go|going)\??$/i.test(corrected)) {
+      corrected = 'Where are you going?';
+      corrections.push({ original: text, corrected: 'Where are you going?', explanation: 'Add auxiliary verb "are" in question.', type: 'grammar' });
+      return {
+        originalText: text,
+        correctedText: 'Where are you going?',
+        naturalPhrasing: 'Could you please let me know where you are heading?',
+        corrections
+      };
+    }
+    // Rule 1E: 'why you not come' / 'why you no come' -> "Why didn't you come?"
+    if (/^why (?:you|u) (?:not come|no come)\??$/i.test(corrected)) {
+      corrected = "Why didn't you come?";
+      corrections.push({ original: text, corrected: "Why didn't you come?", explanation: 'Use past negative auxiliary "didn\'t".', type: 'grammar' });
+      return {
+        originalText: text,
+        correctedText: "Why didn't you come?",
+        naturalPhrasing: "May I ask why you were not able to come?",
+        corrections
+      };
+    }
+    // Rule 1F: 'what your name' / 'ur name what' -> 'What is your name?'
+    if (/^(?:what your name|ur name what|what is u name)\??$/i.test(corrected)) {
+      corrected = 'What is your name?';
+      corrections.push({ original: text, corrected: 'What is your name?', explanation: 'Include auxiliary "is" and possessive "your".', type: 'grammar' });
+      return {
+        originalText: text,
+        correctedText: 'What is your name?',
+        naturalPhrasing: 'Could you please tell me your name?',
         corrections
       };
     }

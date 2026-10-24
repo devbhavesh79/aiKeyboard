@@ -540,6 +540,47 @@ async function runAllPlaywrightTests() {
 
     await page.screenshot({ path: path.join(screenshotsDir, '13_tumhara_nam_kiya_he_workflow.png') });
 
+    // -----------------------------------------------------------------
+    // STEP 11: Testing "are you who?" Broken English Correction & Short Tone
+    // -----------------------------------------------------------------
+    console.log('\n--- Step 11: Testing "are you who?" Broken English Correction ---');
+    await inputField.click();
+    await inputField.fill('');
+    await inputField.pressSequentially('are you who?', { delay: 15 });
+    const whoBanner = page.locator('#correct-english-preview-text');
+    await page.waitForFunction(() => {
+      const el = document.querySelector('#correct-english-preview-text');
+      const text = (el?.textContent || '').toLowerCase();
+      return text && (text.includes('who are you') || text.includes('who this is') || text.includes('who is speaking'));
+    }, { timeout: 9000 }).catch(() => {});
+    await page.waitForTimeout(600);
+
+    const whoPreviewText = await whoBanner.textContent();
+    const isWhoCorrect = /(who are you|who this is|who is speaking)/i.test(whoPreviewText || '');
+    record('"are you who?" Broken English Corrected ("Who are you?")', isWhoCorrect, `Preview: "${whoPreviewText}"`);
+
+    // Verify 1-Tap Apply to Box
+    const applyWhoBtn = page.locator('#btn-apply-correct-english');
+    if (await applyWhoBtn.isVisible()) {
+      await applyWhoBtn.click();
+      await page.waitForTimeout(600);
+      const appliedWho = await inputField.inputValue();
+      record('"are you who?" 1-Tap Applied to Box', /who are you/i.test(appliedWho), `Value: "${appliedWho}"`);
+    }
+
+    // Verify Quick Tone Short for "Who are you?"
+    const quickShort = page.locator('#quick-tone-short');
+    if (await quickShort.isVisible()) {
+      await quickShort.scrollIntoViewIfNeeded();
+      await quickShort.click();
+      await page.waitForTimeout(1600);
+      const shortCard = page.locator('text=Who are you?').or(page.locator('text=Who is this?')).or(page.locator('#tone-variation-card-0')).first();
+      const shortCardVisible = await shortCard.isVisible();
+      record('Broken English: Short Filter Generates Concise Question Card', shortCardVisible);
+    }
+
+    await page.screenshot({ path: path.join(screenshotsDir, '14_are_you_who_workflow.png') });
+
   } catch (err: any) {
     console.error('Fatal error during test run:', err);
     record('Playwright Test Suite Execution', false, err.message);
