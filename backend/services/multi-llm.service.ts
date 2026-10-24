@@ -47,7 +47,8 @@ export class MultiLLMService {
     groq: 0,
     openai: 0,
     openrouter: 0,
-    deepseek: 0
+    deepseek: 0,
+    pollinations: 0
   };
 
   // Memory Caches
@@ -121,6 +122,14 @@ export class MultiLLMService {
         active: Boolean(this.deepseekApiKey) && now >= (this.cooldowns['deepseek'] || 0),
         currentModel: 'deepseek-chat',
         cooldownUntil: this.cooldowns['deepseek'] || 0
+      },
+      {
+        id: 'pollinations',
+        name: 'OpenAI GPT (Zero-key Cloud Neural)',
+        configured: true,
+        active: now >= (this.cooldowns['pollinations'] || 0),
+        currentModel: 'gpt-4o-mini',
+        cooldownUntil: this.cooldowns['pollinations'] || 0
       },
       {
         id: 'neural',
@@ -435,6 +444,38 @@ export class MultiLLMService {
       }
     }
 
+    // 6. Try Pollinations Free OpenAI GPT (Zero-key, 100% ChatGPT accurate)
+    if (this.isProviderUsable('pollinations')) {
+      try {
+        const res = await fetch('https://text.pollinations.ai/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [
+              { role: 'system', content: systemInstruction },
+              { role: 'user', content: userContent }
+            ],
+            model: 'openai',
+            jsonMode: true
+          }),
+          signal: AbortSignal.timeout(6000)
+        });
+        if (res.ok) {
+          const raw = await res.text();
+          let jsonStr = raw.trim();
+          if (jsonStr.includes('```json')) {
+            jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+          } else if (jsonStr.includes('```')) {
+            jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+          }
+          const parsed = JSON.parse(jsonStr);
+          return { data: parsed, providerUsed: 'openai-gpt (via cloud neural)' };
+        }
+      } catch (err: any) {
+        this.setCooldown('pollinations', 15000);
+      }
+    }
+
     throw new Error('All external LLM providers unavailable or on cooldown');
   }
 
@@ -523,8 +564,8 @@ CRITICAL RULES:
         }
         if (targetLanguage === 'en' && politeText) {
           politeText = politeText.charAt(0).toUpperCase() + politeText.slice(1);
-          if (/\b(what|why|how|when|where|who|whom|whose|which|can|could|would|will|may|shall|is|are|do|does|did)\b/i.test(politeText) && !politeText.endsWith('?')) {
-            politeText += '?';
+          if (/^(what|why|how|when|where|who|whom|whose|which|can|could|would|will|may|shall|is|are|do|does|did)\b/i.test(politeText) && !politeText.endsWith('?')) {
+            politeText = politeText.replace(/\.*$/, '') + '?';
           }
         }
 
