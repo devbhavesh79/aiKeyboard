@@ -160,11 +160,16 @@ export class MultiLLMService {
     let t = text;
 
     // 1. Interrogative and question patterns (e.g. "tum kiya kar rah he" -> "tum kya kar rahe ho")
-    t = t.replace(/\b(tum|aap|ap)\s+kiya\b/gi, '$1 kya');
+    t = t.replace(/\b(tum|aap|ap|tera|mera)\s+kiya\b/gi, '$1 kya');
+    t = t.replace(/\b(nam|naam)\s+kiya\b/gi, '$1 kya');
+    t = t.replace(/\bkiya\s+(nam|naam)\b/gi, 'kya $1');
     t = t.replace(/\bkiya\s+(kar|kr|chal|hua|hai|he|h|baat|batao|bole|kaam)\b/gi, 'kya $1');
     t = t.replace(/^kiya\b/gi, 'kya');
     t = t.replace(/\bkiya\s+h\b/gi, 'kya hai');
     t = t.replace(/\bkiya\s+he\b/gi, 'kya hai');
+    t = t.replace(/\b(nam|naam)\s+he\b/gi, '$1 hai');
+    t = t.replace(/\b(nam|naam)\s+h\b/gi, '$1 hai');
+    t = t.replace(/\b(tumhara|aapka|apka|tera|mera|uska|unka)\s+nam\b/gi, '$1 naam');
 
     // 2. Continuous and progressive verbs
     t = t.replace(/\bkar\s+rah\s+he\b/gi, 'kar rahe ho');
@@ -179,6 +184,10 @@ export class MultiLLMService {
     // 3. Common chat spelling replacements
     const tokenPairs: Array<[RegExp, string]> = [
       [/\bme\s+(ja|aa|kal|aaj|kya|kyun|theek|bhi|toh|to|par|pe|hoon|hu|kuch|nahi|nhi|kar|kr|bol|dekh|raha|rha|gaya)\b/gi, 'main $1'],
+      [/\bnam\b/gi, 'naam'],
+      [/\bapka\b/gi, 'aapka'],
+      [/\bapke\b/gi, 'aapke'],
+      [/\bapki\b/gi, 'aapki'],
       [/\bmai\b/gi, 'main'],
       [/\bhu\b/gi, 'hoon'],
       [/\bhun\b/gi, 'hoon'],
@@ -211,7 +220,9 @@ export class MultiLLMService {
       [/\bku\b/gi, 'kyun'],
       [/\bkaha\b/gi, 'kahan'],
       [/\bkidhr\b/gi, 'kidhar'],
-      [/\bjldi\b/gi, 'jaldi']
+      [/\bjldi\b/gi, 'jaldi'],
+      [/\bhe\s*\?*$/gi, 'hai'],
+      [/\bhe\b/gi, 'hai']
     ];
 
     for (const [pattern, repl] of tokenPairs) {
@@ -241,14 +252,16 @@ export class MultiLLMService {
 
     const lower = text.toLowerCase();
     const hinglishWords = [
-      'main', 'kya', 'kab', 'kaise', 'kaha', 'hai', 'hain', 'hoon', 'ho', 'aao', 'jao', 'kal', 'aaj', 'kar', 
-      'raha', 'rahe', 'rahi', 'bhai', 'yaar', 'thoda', 'bahut', 'mujhe', 'hum', 'tum', 'aap', 
-      'mera', 'meri', 'mere', 'karna', 'karo', 'aaunga', 'bhejo', 'bhej', 'milte', 'theek', 
-      'shukriya', 'dhanyawad', 'nahi', 'nikal', 'pahunch', 'chahiye', 'kaam', 'baat'
+      'main', 'kya', 'kiya', 'kab', 'kaise', 'kese', 'kaha', 'kahan', 'kidhar', 'kidhr', 'hai', 'hain', 'he', 'hoon', 'hu', 'ho', 'hoga', 'hogi', 'hoge',
+      'aao', 'jao', 'kal', 'aaj', 'parso', 'kar', 'karna', 'karo', 'raha', 'rahe', 'rahi', 'rha', 'rhe', 'rhi',
+      'bhai', 'yaar', 'thoda', 'bahut', 'bht', 'mujhe', 'hum', 'tum', 'tumhara', 'tumhare', 'tumhari', 'aap', 'aapka', 'aapke', 'aapki', 'apka', 'apke', 'apki',
+      'tera', 'teri', 'tere', 'mera', 'meri', 'mere', 'uska', 'uski', 'uske', 'unka', 'unki', 'unke', 'naam', 'nam',
+      'aaunga', 'aunga', 'jaaunga', 'jaunga', 'bhejo', 'bhej', 'milte', 'theek', 'thik', 'sahi', 
+      'shukriya', 'dhanyawad', 'nahi', 'nhi', 'nikal', 'pahunch', 'chahiye', 'kaam', 'baat', 'bolo', 'batao', 'suno'
     ];
     if (hinglishWords.filter(w => new RegExp(`\\b${w}\\b`, 'i').test(lower)).length >= 1) return 'hi';
 
-    const gujaratiWords = ['tamne', 'mane', 'aaje', 'kale', 'aavish', 'kem', 'cho', 'nathi', 'che', 'chhe', 'maari'];
+    const gujaratiWords = ['tamne', 'mane', 'aaje', 'kale', 'aavish', 'kem', 'cho', 'nathi', 'che', 'chhe', 'maari', 'tamaru', 'tamaro', 'tamari', 'tame'];
     if (gujaratiWords.some(w => new RegExp(`\\b${w}\\b`, 'i').test(lower))) return 'gu';
 
     const spanishWords = ['hola', 'gracias', 'por', 'favor', 'como', 'estas', 'buenos'];
@@ -264,7 +277,8 @@ export class MultiLLMService {
     try {
       let sl = sourceLang;
       if (sl === 'auto' || sl === 'hinglish') {
-        sl = this.detectLanguage(text) || 'auto';
+        const detected = this.detectLanguage(text);
+        sl = (detected && detected !== 'en') ? detected : 'auto';
       }
       const queryText = this.normalizeHinglishInput(text);
       const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${targetLang}&dt=t&q=${encodeURIComponent(queryText)}`;
@@ -507,6 +521,12 @@ CRITICAL RULES:
         if (targetLanguage === 'en' && !/please|kindly|could you/i.test(politeText) && /bhej|send|give/i.test(text)) {
           politeText = `Could you please ${politeText.charAt(0).toLowerCase() + politeText.slice(1)}`;
         }
+        if (targetLanguage === 'en' && politeText) {
+          politeText = politeText.charAt(0).toUpperCase() + politeText.slice(1);
+          if (/\b(what|why|how|when|where|who|whom|whose|which|can|could|would|will|may|shall|is|are|do|does|did)\b/i.test(politeText) && !politeText.endsWith('?')) {
+            politeText += '?';
+          }
+        }
 
         const result: TranslateResponse & { providerUsed?: string } = {
           translatedText: politeText,
@@ -654,9 +674,13 @@ CRITICAL RULES:
       let coreText = text;
       const normalized = this.normalizeHinglishInput(text);
       if (targetLanguage !== 'hinglish') {
-        const neural = await this.fetchNeuralTranslate(normalized, targetLanguage);
-        if (neural && neural.translatedText && neural.translatedText.trim()) {
+        const neural = await this.fetchNeuralTranslate(normalized, targetLanguage, 'hinglish');
+        if (neural && neural.translatedText && neural.translatedText.trim() &&
+            neural.translatedText.toLowerCase().trim() !== text.toLowerCase().trim() &&
+            !/\b(tumhara|naam|nam|kiya|kya|aapka|tera|kahan|kidhar|kaise|aaunga)\b/i.test(neural.translatedText)) {
           coreText = neural.translatedText.trim();
+        } else if (targetLanguage === 'en') {
+          coreText = this.offlineFallbackTranslate(normalized, 'hinglish', 'en', new Map(), 'default').translatedText;
         }
       } else {
         coreText = normalized;
@@ -803,14 +827,31 @@ Return JSON with format:
     // Default polite translation fallback
     let tr = text;
     if (targetLang === 'en') {
-      if (lower.includes('late') || lower.includes('traffic')) tr = "I will be a little late tomorrow due to traffic.";
-      else if (lower.includes('ja raha') || lower.includes('nikal')) tr = "I am leaving now.";
-      else if (lower.includes('report') && lower.includes('bhej')) tr = "Please send me the report.";
-      else if (lower.includes('kiya kar') || lower.includes('kya kar') || lower.includes('tum kiya') || lower.includes('what you doing') || lower.includes('what u doing')) tr = "What are you currently doing?";
-      else if (lower.includes('kal aao') || lower.includes('kal aaunga') || lower.includes('i will coming')) tr = "I will come tomorrow.";
-      else if (lower.includes('send me this fast') || lower.includes('send fast')) tr = "Please send this to me as soon as possible.";
-      else if (lower === 'me i go' || lower === 'me go' || lower === 'i go' || lower.includes('can i go') || lower.includes('may i go') || lower.includes('permission to go') || lower.includes('leave now')) tr = "May I go?";
-      else {
+      if (/\b(nam|naam|name)\b/i.test(lower) && /\b(tumhara|aapka|apka|tera|your|kya|kiya|what|batao)\b/i.test(lower)) {
+        tr = "What is your name?";
+      } else if (/\b(kaise|kese)\b/i.test(lower) && /\b(ho|hai|aap|tum)\b/i.test(lower)) {
+        tr = "How are you?";
+      } else if (/\b(kahan|kaha|kidhar|kidhr)\b/i.test(lower) && /\b(ho|hai|aap|tum)\b/i.test(lower)) {
+        tr = "Where are you?";
+      } else if (/\b(kab)\b/i.test(lower) && /\b(aao|aaoge|aoge|aa rahe|a rahe)\b/i.test(lower)) {
+        tr = "When are you coming?";
+      } else if (/\b(kya|kiya)\s+(hua|chal raha)\b/i.test(lower)) {
+        tr = "What happened?";
+      } else if (lower.includes('late') || lower.includes('traffic')) {
+        tr = "I will be a little late tomorrow due to traffic.";
+      } else if (lower.includes('ja raha') || lower.includes('nikal')) {
+        tr = "I am leaving now.";
+      } else if (lower.includes('report') && lower.includes('bhej')) {
+        tr = "Please send me the report.";
+      } else if (lower.includes('kiya kar') || lower.includes('kya kar') || lower.includes('tum kiya') || lower.includes('what you doing') || lower.includes('what u doing')) {
+        tr = "What are you currently doing?";
+      } else if (lower.includes('kal aao') || lower.includes('kal aaunga') || lower.includes('i will coming')) {
+        tr = "I will come tomorrow.";
+      } else if (lower.includes('send me this fast') || lower.includes('send fast')) {
+        tr = "Please send this to me as soon as possible.";
+      } else if (lower === 'me i go' || lower === 'me go' || lower === 'i go' || lower.includes('can i go') || lower.includes('may i go') || lower.includes('permission to go') || lower.includes('leave now')) {
+        tr = "May I go?";
+      } else {
         tr = this.offlineFallbackGrammar(text).correctedText;
       }
     } else if (targetLang === 'hi') {
@@ -1535,7 +1576,8 @@ Return JSON with format:
   public offlineFallbackRewrite(text: string, action: string, targetLanguage: SupportedLanguage): RewriteResponse {
     const lower = text.toLowerCase().trim();
     const isLeaveOrGo = lower.includes('me i go') || lower.includes('me go') || lower.includes('may i go') || lower.includes('can i go') || lower.includes('should i go') || lower.includes('shall i go') || lower.includes('permission to leave') || lower.includes('leave now') || lower.includes('niklu') || lower.includes('jaa sakta') || lower === 'i go' || lower === 'may i leave';
-    const isQuestion = isLeaveOrGo || lower.includes('what') || lower.includes('why') || lower.includes('how') || lower.includes('when') || lower.includes('where') || lower.includes('are you') || lower.includes('can you') || lower.includes('may i') || lower.includes('can i') || lower.includes('shall i') || lower.includes('should i') || lower.includes('kya') || lower.includes('kiya') || lower.includes('kaise') || lower.includes('kab') || lower.includes('kahan') || lower.includes('?') || lower.includes('doing');
+    const isName = /\b(name|nam|naam)\b/i.test(lower) && (/\b(what|tumhara|aapka|apka|tera|your|kya|kiya|who|tell|batao|inquire)\b/i.test(lower) || lower.includes('nam') || lower.includes('naam'));
+    const isQuestion = isLeaveOrGo || isName || lower.includes('what') || lower.includes('why') || lower.includes('how') || lower.includes('when') || lower.includes('where') || lower.includes('are you') || lower.includes('can you') || lower.includes('may i') || lower.includes('can i') || lower.includes('shall i') || lower.includes('should i') || lower.includes('kya') || lower.includes('kiya') || lower.includes('kaise') || lower.includes('kab') || lower.includes('kahan') || lower.includes('?') || lower.includes('doing');
     const isRequest = lower.includes('send') || lower.includes('give') || lower.includes('share') || lower.includes('provide') || lower.includes('call') || lower.includes('help') || lower.includes('bhej');
 
     let rewritten = text;
@@ -1601,7 +1643,65 @@ Return JSON with format:
             break;
         }
       } else if (isQuestion) {
-        if (lower.includes('doing') || lower.includes('working') || lower.includes('activity') || lower.includes('kar rah') || lower.includes('kiya kar') || lower.includes('kya kar') || lower.includes('kya chal')) {
+        if (isName) {
+          switch (action) {
+            case 'make_polite':
+              rewritten = "Could you please tell me your name?";
+              alts = [
+                "Could you please tell me your name?",
+                "May I kindly know your name, please?",
+                "Would you mind sharing your name with me?",
+                "May I please have your name?"
+              ];
+              break;
+            case 'make_professional':
+              rewritten = "May I inquire what your name is?";
+              alts = [
+                "May I inquire what your name is?",
+                "Could you please provide your full name?",
+                "Kindly share your name for our official records.",
+                "Would you please confirm your name?"
+              ];
+              break;
+            case 'make_friendly':
+              rewritten = "What's your name? Nice to meet you!";
+              alts = [
+                "What's your name? Nice to meet you!",
+                "Hey, what's your name?",
+                "Mind sharing your name?",
+                "Hey there, what should I call you?"
+              ];
+              break;
+            case 'make_formal':
+              rewritten = "May I respectfully request your name?";
+              alts = [
+                "May I respectfully request your name?",
+                "I would be grateful if you could formally state your name.",
+                "Kindly provide your full legal name for the record.",
+                "May I be formally apprised of your name?"
+              ];
+              break;
+            case 'make_shorter':
+              rewritten = "What's your name?";
+              alts = [
+                "What's your name?",
+                "Your name, please?",
+                "May I have your name?",
+                "Who am I speaking with?"
+              ];
+              break;
+            case 'make_clearer':
+            default:
+              rewritten = "What is your name?";
+              alts = [
+                "What is your name?",
+                "Could you tell me your name?",
+                "May I know your name?",
+                "Please tell me what your name is."
+              ];
+              break;
+          }
+        } else if (lower.includes('doing') || lower.includes('working') || lower.includes('activity') || lower.includes('kar rah') || lower.includes('kiya kar') || lower.includes('kya kar') || lower.includes('kya chal')) {
           switch (action) {
             case 'make_polite':
               rewritten = "Could you please let me know what you are currently doing?";
@@ -1903,62 +2003,120 @@ Return JSON with format:
       }
     } else if (targetLanguage === 'hi') {
       if (isQuestion) {
-        switch (action) {
-          case 'make_polite':
-            rewritten = "कृपया क्या आप मुझे बताएंगे कि आप इस समय क्या कर रहे हैं?";
-            alts = [
-              "कृपया क्या आप मुझे बताएंगे कि आप इस समय क्या कर रहे हैं?",
-              "सादर अनुरोध है कि कृपया अपने वर्तमान कार्य की जानकारी साझा करें।"
-            ];
-            break;
-          case 'make_professional':
-            rewritten = "कृपया अपने वर्तमान कार्य की स्थिति और प्रगति से अवगत कराने की कृपा करें।";
-            alts = [
-              "कृपया अपने वर्तमान कार्य की स्थिति और प्रगति से अवगत कराने की कृपा करें।",
-              "कार्य की वर्तमान स्थिति की जानकारी साझा करने की कृपा करें।"
-            ];
-            break;
-          case 'make_friendly':
-            rewritten = "तुम अभी क्या कर रहे हो?";
-            alts = ["तुम अभी क्या कर रहे हो?", "क्या चल रहा है अभी?"];
-            break;
-          default:
-            rewritten = "आप अभी क्या कर रहे हैं?";
-            alts = ["आप अभी क्या कर रहे हैं?"];
+        if (isName) {
+          switch (action) {
+            case 'make_polite':
+              rewritten = "क्या मैं आपका शुभ नाम जान सकता हूँ?";
+              alts = [
+                "क्या मैं आपका शुभ नाम जान सकता हूँ?",
+                "कृपया अपना नाम बताने की कृपा करेंगे?",
+                "क्या मैं आपका नाम जान सकता हूँ?",
+                "आपका शुभ नाम क्या है?"
+              ];
+              break;
+            case 'make_professional':
+              rewritten = "कृपया आधिकारिक रिकॉर्ड हेतु अपना पूरा नाम बताएं।";
+              alts = [
+                "कृपया आधिकारिक रिकॉर्ड हेतु अपना पूरा नाम बताएं।",
+                "क्या आप अपना पूरा नाम साझा करने का कष्ट करेंगे?",
+                "कृपया अपना नाम स्पष्ट रूप से बताएं।"
+              ];
+              break;
+            case 'make_friendly':
+              rewritten = "तुम्हारा नाम क्या है?";
+              alts = [
+                "तुम्हारा नाम क्या है?",
+                "अरे, तुम्हारा नाम क्या है?",
+                "नाम क्या है तुम्हारा?",
+                "बताओ तुम्हारा नाम क्या है?"
+              ];
+              break;
+            default:
+              rewritten = "आपका नाम क्या है?";
+              alts = [
+                "आपका नाम क्या है?",
+                "आपका शुभ नाम?",
+                "नाम क्या है?"
+              ];
+          }
+        } else {
+          switch (action) {
+            case 'make_polite':
+              rewritten = "कृपया क्या आप मुझे बताएंगे कि आप इस समय क्या कर रहे हैं?";
+              alts = [
+                "कृपया क्या आप मुझे बताएंगे कि आप इस समय क्या कर रहे हैं?",
+                "सादर अनुरोध है कि कृपया अपने वर्तमान कार्य की जानकारी साझा करें।"
+              ];
+              break;
+            case 'make_professional':
+              rewritten = "कृपया अपने वर्तमान कार्य की स्थिति और प्रगति से अवगत कराने की कृपा करें।";
+              alts = [
+                "कृपया अपने वर्तमान कार्य की स्थिति और प्रगति से अवगत कराने की कृपा करें।",
+                "कार्य की वर्तमान स्थिति की जानकारी साझा करने की कृपा करें।"
+              ];
+              break;
+            case 'make_friendly':
+              rewritten = "तुम अभी क्या कर रहे हो?";
+              alts = ["तुम अभी क्या कर रहे हो?", "क्या चल रहा है अभी?"];
+              break;
+            default:
+              rewritten = "आप अभी क्या कर रहे हैं?";
+              alts = ["आप अभी क्या कर रहे हैं?"];
+          }
         }
       } else {
         rewritten = "कृपया संदेश की समीक्षा करें और पुष्टि करें।";
         alts = [rewritten, "सादर अनुरोध है कि विवरण देखें।"];
       }
     } else if (targetLanguage === 'gu') {
-      rewritten = "કૃપા કરીને આપના વર્તમાન કાર્યની સ્થિતિ જણાવવા વિનંતી.";
-      alts = [
-        "કૃપા કરીને આપના વર્તમાન કાર્યની સ્થિતિ જણાવવા વિનંતી.",
-        "તમે અત્યારે શું કરી રહ્યા છો, કૃપા કરીને જણાવશો?"
-      ];
+      if (isName) {
+        rewritten = "શું હું આપનું શુભ નામ જાણી શકું છું?";
+        alts = [
+          "શું હું આપનું શુભ નામ જાણી શકું છું?",
+          "કૃપા કરીને આપનું નામ જણાવવા વિનંતી.",
+          "આપનું શુભ નામ શું છે?",
+          "તમારું નામ શું છે?"
+        ];
+      } else {
+        rewritten = "કૃપા કરીને આપના વર્તમાન કાર્યની સ્થિતિ જણાવવા વિનંતી.";
+        alts = [
+          "કૃપા કરીને આપના વર્તમાન કાર્યની સ્થિતિ જણાવવા વિનંતી.",
+          "તમે અત્યારે શું કરી રહ્યા છો, કૃપા કરીને જણાવશો?"
+        ];
+      }
     } else if (targetLanguage === 'hinglish') {
-      switch (action) {
-        case 'make_polite':
-          rewritten = "Aap abhi kya kar rahe hain, please bata sakte hain?";
-          alts = [
-            "Aap abhi kya kar rahe hain, please bata sakte hain?",
-            "Could you please let me know aap abhi kya kar rahe ho?"
-          ];
-          break;
-        case 'make_professional':
-          rewritten = "Please apne current task ka status update share karein.";
-          alts = [
-            "Please apne current task ka status update share karein.",
-            "Aap abhi kis task par progress kar rahe hain, please update karein."
-          ];
-          break;
-        case 'make_friendly':
-          rewritten = "Tum abhi kya kar rahe ho?";
-          alts = ["Tum abhi kya kar rahe ho?", "Kya chal raha hai abhi?"];
-          break;
-        default:
-          rewritten = text;
-          alts = [text];
+      if (isName) {
+        rewritten = "Aapka naam kya hai?";
+        alts = [
+          "Aapka naam kya hai?",
+          "Could you please tell me aapka naam?",
+          "Tumhara naam kya hai?",
+          "Aapka shubh naam kya hai?"
+        ];
+      } else {
+        switch (action) {
+          case 'make_polite':
+            rewritten = "Aap abhi kya kar rahe hain, please bata sakte hain?";
+            alts = [
+              "Aap abhi kya kar rahe hain, please bata sakte hain?",
+              "Could you please let me know aap abhi kya kar rahe ho?"
+            ];
+            break;
+          case 'make_professional':
+            rewritten = "Please apne current task ka status update share karein.";
+            alts = [
+              "Please apne current task ka status update share karein.",
+              "Aap abhi kis task par progress kar rahe hain, please update karein."
+            ];
+            break;
+          case 'make_friendly':
+            rewritten = "Tum abhi kya kar rahe ho?";
+            alts = ["Tum abhi kya kar rahe ho?", "Kya chal raha hai abhi?"];
+            break;
+          default:
+            rewritten = text;
+            alts = [text];
+        }
       }
     }
 
