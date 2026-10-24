@@ -200,9 +200,10 @@ async function runAllPlaywrightTests() {
     // STEP 4: Hinglish Typing & Real-time Auto-Translate Preview
     // -----------------------------------------------------------------
     console.log('\n--- Step 4: Testing Hinglish Typing ("tum kiya kar rah he") ---');
+    await inputField.click();
     await inputField.fill('');
-    await inputField.fill('tum kiya kar rah he');
-    await page.waitForTimeout(1500);
+    await inputField.pressSequentially('tum kiya kar rah he', { delay: 20 });
+    await page.waitForTimeout(1600);
 
     // Look for live translation preview banner showing "What are you currently doing" or "what are you doing"
     const transBannerText = page.locator('#correct-english-preview-text').or(page.locator('span:has-text("What are you currently doing")')).or(page.locator('span:has-text("what are you doing")')).first();
@@ -277,24 +278,45 @@ async function runAllPlaywrightTests() {
 
     await page.screenshot({ path: path.join(screenshotsDir, '07_tone_replaced_in_box.png') });
 
+    // Close tone panel if open
+    const closeToneBtn = page.locator('#btn-close-word-tone');
+    if (await closeToneBtn.isVisible()) {
+      await closeToneBtn.click();
+      await page.waitForTimeout(300);
+    }
+
     // -----------------------------------------------------------------
     // STEP 6: Multi-language Target Switching (Hindi & Gujarati)
     // -----------------------------------------------------------------
     console.log('\n--- Step 6: Testing Smart Reply Language Switching (Hindi & Gujarati) ---');
+    await inputField.click();
+    await inputField.fill('');
+    await page.waitForTimeout(300);
     // Click "Are you coming tomorrow?" to ensure selection panel is open
     await comingBubble.scrollIntoViewIfNeeded();
     await comingBubble.click();
     await page.waitForTimeout(1000);
+
+    // Reset filter to All to test default multi-track replies
+    const filterAll = page.locator('#reply-filter-all');
+    if (await filterAll.isVisible()) {
+      await filterAll.click();
+      await page.waitForTimeout(600);
+    }
 
     // Tap the Hindi Smart Reply pill under "Smart Reply Language (जवाब की भाषा)"
     console.log('Selecting Hindi Smart Reply pill...');
     const hiReplyPill = page.locator('#smart-reply-lang-hi');
     await hiReplyPill.scrollIntoViewIfNeeded();
     await hiReplyPill.click();
-    await page.waitForTimeout(1500);
+    
+    // Wait for loading spinner to finish
+    await page.locator('text=Translating and generating smart answers...').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(400);
 
     const hiOpt1 = page.locator('text=हाँ, मैं कल निश्चित रूप से आऊँगा। धन्यवाद!').first();
     const hiOpt2 = page.locator('text=क्षमा करें, पूर्व व्यस्तता के कारण मैं कल उपस्थित नहीं हो पाऊँगा।').first();
+    await hiOpt1.waitFor({ state: 'visible', timeout: 6000 }).catch(() => {});
     const hiOpt1Visible = await hiOpt1.isVisible();
     const hiOpt2Visible = await hiOpt2.isVisible();
     record('Hindi Target Language Smart Reply (Devanagari Track 1)', hiOpt1Visible);
@@ -317,9 +339,13 @@ async function runAllPlaywrightTests() {
     const guReplyPill = page.locator('#smart-reply-lang-gu');
     await guReplyPill.scrollIntoViewIfNeeded();
     await guReplyPill.click();
-    await page.waitForTimeout(1500);
+    
+    // Wait for loading spinner to finish
+    await page.locator('text=Translating and generating smart answers...').waitFor({ state: 'detached', timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(400);
 
     const guOpt1 = page.locator('text=હા, હું આવતીકાલે ચોક્કસ આવીશ. આભાર!').first();
+    await guOpt1.waitFor({ state: 'visible', timeout: 6000 }).catch(() => {});
     const guVisible = await guOpt1.isVisible();
     record('Gujarati Target Language Smart Reply (Gujarati Script)', guVisible);
 
@@ -354,10 +380,15 @@ async function runAllPlaywrightTests() {
     console.log('\n--- Step 8: Testing English Typing, Correct English & Different Ways to Send ---');
     await inputField.fill('');
     await inputField.fill('i will coming tomorrow');
-    await page.waitForTimeout(1500);
-
-    // Verify "Correct English" preview banner contains "I will come tomorrow."
+    
+    // Wait for debounce and polishing to complete
     const correctEngBanner = page.locator('#correct-english-preview-text');
+    await page.waitForFunction(() => {
+      const el = document.querySelector('#correct-english-preview-text');
+      return el && el.textContent && el.textContent.includes('I will come tomorrow');
+    }, { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(400);
+
     const correctEngText = await correctEngBanner.textContent();
     const isCorrectEngVisible = (correctEngText || '').includes('I will come tomorrow');
     record('English Typing: Correct English Suggestion Generated ("I will come tomorrow.")', isCorrectEngVisible, `Preview: "${correctEngText}"`);
@@ -395,6 +426,64 @@ async function runAllPlaywrightTests() {
     record('Different Ways to Send: Casual English Variation Generated', casualVarVisible);
 
     await page.screenshot({ path: path.join(screenshotsDir, '11_correct_english_and_different_ways.png') });
+
+    // -----------------------------------------------------------------
+    // STEP 9: Testing "me i go" Broken English Correction & Multiple Variations across All Filters
+    // -----------------------------------------------------------------
+    console.log('\n--- Step 9: Testing "me i go" Broken English & Multiple Cards ---');
+    await inputField.fill('');
+    await page.waitForTimeout(300);
+    await inputField.fill('me i go');
+    const meIGoBanner = page.locator('#correct-english-preview-text');
+    await page.waitForFunction(() => {
+      const el = document.querySelector('#correct-english-preview-text');
+      return el && el.textContent && el.textContent.includes('May I go');
+    }, { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(400);
+
+    // Verify preview banner shows "May I go?"
+    const meIGoPreviewText = await meIGoBanner.textContent();
+    const isMeIGoCorrect = (meIGoPreviewText || '').includes('May I go');
+    record('"me i go" Correct English Generated ("May I go?")', isMeIGoCorrect, `Preview: "${meIGoPreviewText}"`);
+
+    // Verify Apply Correct English Button
+    const applyMeIGoBtn = page.locator('#btn-apply-correct-english');
+    if (await applyMeIGoBtn.isVisible()) {
+      await applyMeIGoBtn.click();
+      await page.waitForTimeout(600);
+      const appliedMeIGo = await inputField.inputValue();
+      record('"me i go" 1-Tap Applied to Box ("May I go?")', appliedMeIGo.includes('May I go'), `Value: "${appliedMeIGo}"`);
+    }
+
+    // Test Casual Tone for "me i go"
+    await quickCasual.scrollIntoViewIfNeeded();
+    await quickCasual.click();
+    await page.waitForTimeout(1500);
+
+    const casualOption = page.locator('div:has-text("Can I head out now? Catch you later!")').last();
+    const casualOptVisible = await casualOption.isVisible();
+    record('"me i go" Casual Filter Generates 4 Polite Options', casualOptVisible);
+
+    // Test Professional Tone for "me i go"
+    await quickProf.scrollIntoViewIfNeeded();
+    await quickProf.click();
+    await page.waitForTimeout(1500);
+
+    const profOption = page.locator('div:has-text("May I please request permission to depart at this time?")').last();
+    const profOptVisible = await profOption.isVisible();
+    record('"me i go" Professional Filter Generates Formal Leave Options', profOptVisible);
+
+    // Test Polite Tone for "me i go"
+    const quickPolite = page.locator('#quick-tone-polite');
+    await quickPolite.scrollIntoViewIfNeeded();
+    await quickPolite.click();
+    await page.waitForTimeout(1500);
+
+    const politeOption = page.locator('div:has-text("Could you please let me know if I may go now?")').last();
+    const politeOptVisible = await politeOption.isVisible();
+    record('"me i go" Polite Filter Generates Respectful Leave Options', politeOptVisible);
+
+    await page.screenshot({ path: path.join(screenshotsDir, '12_me_i_go_all_filters.png') });
 
   } catch (err: any) {
     console.error('Fatal error during test run:', err);

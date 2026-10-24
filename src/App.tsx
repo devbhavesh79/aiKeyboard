@@ -2580,7 +2580,11 @@ export default function App() {
                       </button>
 
                       <button
-                        onClick={() => setIsTonePanelOpen(false)}
+                        id="btn-close-word-tone"
+                        onClick={() => {
+                          setIsTonePanelOpen(false);
+                          setActiveToolbarMode(null);
+                        }}
                         className="ml-auto text-slate-400 hover:text-white px-1.5 text-xs font-bold"
                       >
                         ✕

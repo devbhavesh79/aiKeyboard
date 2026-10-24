@@ -178,7 +178,7 @@ export class MultiLLMService {
 
     // 3. Common chat spelling replacements
     const tokenPairs: Array<[RegExp, string]> = [
-      [/\bme\b/gi, 'main'],
+      [/\bme\s+(ja|aa|kal|aaj|kya|kyun|theek|bhi|toh|to|par|pe|hoon|hu|kuch|nahi|nhi|kar|kr|bol|dekh|raha|rha|gaya)\b/gi, 'main $1'],
       [/\bmai\b/gi, 'main'],
       [/\bhu\b/gi, 'hoon'],
       [/\bhun\b/gi, 'hoon'],
@@ -809,6 +809,7 @@ Return JSON with format:
       else if (lower.includes('kiya kar') || lower.includes('kya kar') || lower.includes('tum kiya') || lower.includes('what you doing') || lower.includes('what u doing')) tr = "What are you currently doing?";
       else if (lower.includes('kal aao') || lower.includes('kal aaunga') || lower.includes('i will coming')) tr = "I will come tomorrow.";
       else if (lower.includes('send me this fast') || lower.includes('send fast')) tr = "Please send this to me as soon as possible.";
+      else if (lower === 'me i go' || lower === 'me go' || lower === 'i go' || lower.includes('can i go') || lower.includes('may i go') || lower.includes('permission to go') || lower.includes('leave now')) tr = "May I go?";
       else {
         tr = this.offlineFallbackGrammar(text).correctedText;
       }
@@ -1533,14 +1534,73 @@ Return JSON with format:
 
   public offlineFallbackRewrite(text: string, action: string, targetLanguage: SupportedLanguage): RewriteResponse {
     const lower = text.toLowerCase().trim();
-    const isQuestion = lower.includes('what') || lower.includes('why') || lower.includes('how') || lower.includes('when') || lower.includes('where') || lower.includes('are you') || lower.includes('can you') || lower.includes('kya') || lower.includes('kiya') || lower.includes('kaise') || lower.includes('kab') || lower.includes('kahan') || lower.includes('?') || lower.includes('doing');
+    const isLeaveOrGo = lower.includes('me i go') || lower.includes('me go') || lower.includes('may i go') || lower.includes('can i go') || lower.includes('should i go') || lower.includes('shall i go') || lower.includes('permission to leave') || lower.includes('leave now') || lower.includes('niklu') || lower.includes('jaa sakta') || lower === 'i go' || lower === 'may i leave';
+    const isQuestion = isLeaveOrGo || lower.includes('what') || lower.includes('why') || lower.includes('how') || lower.includes('when') || lower.includes('where') || lower.includes('are you') || lower.includes('can you') || lower.includes('may i') || lower.includes('can i') || lower.includes('shall i') || lower.includes('should i') || lower.includes('kya') || lower.includes('kiya') || lower.includes('kaise') || lower.includes('kab') || lower.includes('kahan') || lower.includes('?') || lower.includes('doing');
     const isRequest = lower.includes('send') || lower.includes('give') || lower.includes('share') || lower.includes('provide') || lower.includes('call') || lower.includes('help') || lower.includes('bhej');
 
     let rewritten = text;
     let alts = [text];
 
     if (targetLanguage === 'en') {
-      if (isQuestion) {
+      if (isLeaveOrGo) {
+        switch (action) {
+          case 'make_polite':
+            rewritten = "Could you please let me know if I may go now?";
+            alts = [
+              "Could you please let me know if I may go now?",
+              "May I kindly be excused to leave at this time?",
+              "Would it be alright if I head out now? Thank you!",
+              "May I please take your leave now?"
+            ];
+            break;
+          case 'make_professional':
+            rewritten = "May I please request permission to depart at this time?";
+            alts = [
+              "May I please request permission to depart at this time?",
+              "Kindly advise if my assistance is further required, or if I may be excused.",
+              "Please let me know if I may conclude for the day and take my leave.",
+              "I would like to respectfully inquire if I may depart now."
+            ];
+            break;
+          case 'make_friendly':
+            rewritten = "Can I head out now? Catch you later!";
+            alts = [
+              "Can I head out now? Catch you later!",
+              "Mind if I take off now?",
+              "Is it cool if I head out now? See you tomorrow!",
+              "Hey, can I bounce now? Talk soon!"
+            ];
+            break;
+          case 'make_formal':
+            rewritten = "I respectfully request permission to depart from the premises.";
+            alts = [
+              "I respectfully request permission to depart from the premises.",
+              "May I be formally excused at this juncture?",
+              "I hereby formally submit my request to take leave.",
+              "Permission to depart is respectfully requested."
+            ];
+            break;
+          case 'make_shorter':
+            rewritten = "May I leave now?";
+            alts = [
+              "May I leave now?",
+              "Can I go?",
+              "Permission to leave?",
+              "Heading out now."
+            ];
+            break;
+          case 'make_clearer':
+          default:
+            rewritten = "May I please leave now?";
+            alts = [
+              "May I please leave now?",
+              "Could I go now?",
+              "May I go?",
+              "Can I be excused now?"
+            ];
+            break;
+        }
+      } else if (isQuestion) {
         if (lower.includes('doing') || lower.includes('working') || lower.includes('activity') || lower.includes('kar rah') || lower.includes('kiya kar') || lower.includes('kya kar') || lower.includes('kya chal')) {
           switch (action) {
             case 'make_polite':
@@ -1548,7 +1608,8 @@ Return JSON with format:
               alts = [
                 "Could you please let me know what you are currently doing?",
                 "May I kindly inquire what you are working on right now?",
-                "Could you please share your current update with me?"
+                "Could you please share your current update with me?",
+                "Would you mind letting me know your current status?"
               ];
               break;
             case 'make_professional':
@@ -1556,7 +1617,8 @@ Return JSON with format:
               alts = [
                 "Could you please provide an update on your current progress?",
                 "Please share the current status of your tasks at your convenience.",
-                "Kindly advise on your current tasks and availability."
+                "Kindly advise on your current tasks and availability.",
+                "Please provide a status report on your ongoing deliverables."
               ];
               break;
             case 'make_friendly':
@@ -1564,21 +1626,25 @@ Return JSON with format:
               alts = [
                 "What are you up to right now?",
                 "What are you working on at the moment?",
-                "Hey, what are you doing right now?"
+                "Hey, what are you doing right now?",
+                "How's everything going with your work today?"
               ];
               break;
             case 'make_formal':
               rewritten = "I would appreciate an update regarding your present tasks.";
               alts = [
                 "I would appreciate an update regarding your present tasks.",
-                "Could you kindly communicate your current progress and status?"
+                "Could you kindly communicate your current progress and status?",
+                "An official progress report regarding your present tasks would be appreciated."
               ];
               break;
             case 'make_shorter':
               rewritten = "What are you working on?";
               alts = [
                 "What are you working on?",
-                "Current update please?"
+                "Current update please?",
+                "Status update?",
+                "What are you up to?"
               ];
               break;
             case 'make_clearer':
@@ -1586,7 +1652,8 @@ Return JSON with format:
               rewritten = "What are you currently doing?";
               alts = [
                 "What are you currently doing?",
-                "What are you working on right now?"
+                "What are you working on right now?",
+                "Could you clarify what you are currently doing?"
               ];
               break;
           }
@@ -1598,23 +1665,45 @@ Return JSON with format:
               alts = [
                 rewritten,
                 `May I kindly ask ${cleanQ.charAt(0).toLowerCase() + cleanQ.slice(1)}?`,
-                `Would you mind sharing details on ${cleanQ.charAt(0).toLowerCase() + cleanQ.slice(1)}?`
+                `Would you mind sharing details on ${cleanQ.charAt(0).toLowerCase() + cleanQ.slice(1)}?`,
+                `I would be grateful if you could let me know ${cleanQ.charAt(0).toLowerCase() + cleanQ.slice(1)}.`
               ];
               break;
             case 'make_professional':
               rewritten = `Could you please provide information regarding ${cleanQ.charAt(0).toLowerCase() + cleanQ.slice(1)}?`;
               alts = [
                 rewritten,
-                `Kindly share an update regarding ${cleanQ.charAt(0).toLowerCase() + cleanQ.slice(1)}.`
+                `Kindly share an update regarding ${cleanQ.charAt(0).toLowerCase() + cleanQ.slice(1)}.`,
+                `Please advise on the current status regarding ${cleanQ.charAt(0).toLowerCase() + cleanQ.slice(1)}.`,
+                `I am writing to inquire about ${cleanQ.charAt(0).toLowerCase() + cleanQ.slice(1)}.`
               ];
               break;
             case 'make_friendly':
               rewritten = cleanQ.endsWith('?') ? cleanQ : `${cleanQ}?`;
-              alts = [rewritten, `Hey, ${cleanQ}?`];
+              alts = [
+                rewritten,
+                `Hey, ${cleanQ}?`,
+                `Quick question: ${cleanQ}?`,
+                `Just curious, ${cleanQ}?`
+              ];
               break;
+            case 'make_formal':
+              rewritten = `I respectfully inquire regarding ${cleanQ.charAt(0).toLowerCase() + cleanQ.slice(1)}.`;
+              alts = [
+                rewritten,
+                `Kindly inform me as to ${cleanQ.charAt(0).toLowerCase() + cleanQ.slice(1)}.`,
+                `Please provide official clarification regarding ${cleanQ.charAt(0).toLowerCase() + cleanQ.slice(1)}.`
+              ];
+              break;
+            case 'make_shorter':
             default:
-              rewritten = text;
-              alts = [text];
+              rewritten = cleanQ.endsWith('?') ? cleanQ : `${cleanQ}?`;
+              alts = [
+                rewritten,
+                `${cleanQ}?`,
+                `Update on ${cleanQ}?`
+              ];
+              break;
           }
         }
       } else if (isRequest) {
@@ -1624,28 +1713,34 @@ Return JSON with format:
             alts = [
               "Could you please share this at your earliest convenience?",
               "I would greatly appreciate it if you could send this over.",
-              "Kindly provide this when you have a moment, thank you."
+              "Kindly provide this when you have a moment, thank you.",
+              "Would you be kind enough to forward this when possible?"
             ];
             break;
           case 'make_professional':
             rewritten = "Please provide the requested details at your earliest convenience.";
             alts = [
               "Please provide the requested details at your earliest convenience.",
-              "Kindly submit the documentation for our scheduled review."
+              "Kindly submit the documentation for our scheduled review.",
+              "Please forward the relevant information at your earliest convenience.",
+              "Your prompt assistance in providing this would be appreciated."
             ];
             break;
           case 'make_friendly':
             rewritten = "Could you shoot this over when you get a chance? Thanks!";
             alts = [
               "Could you shoot this over when you get a chance? Thanks!",
-              "Whenever you have a moment, please share this across."
+              "Whenever you have a moment, please share this across.",
+              "Hey, send this through whenever you can!",
+              "Drop this over when you're free, thanks!"
             ];
             break;
           case 'make_formal':
             rewritten = "Kindly forward the required documentation at your earliest convenience.";
             alts = [
               "Kindly forward the required documentation at your earliest convenience.",
-              "Please provide the requested records at your convenience."
+              "Please provide the requested records at your convenience.",
+              "I formally request the provision of the aforementioned materials."
             ];
             break;
           case 'make_shorter':
@@ -1653,7 +1748,9 @@ Return JSON with format:
             rewritten = "Please send when possible.";
             alts = [
               "Please send when possible.",
-              "Kindly share this."
+              "Kindly share this.",
+              "Send over when free.",
+              "Need this, thanks!"
             ];
             break;
         }
@@ -1671,7 +1768,8 @@ Return JSON with format:
               alts = [
                 "I would like to kindly confirm that I will come tomorrow.",
                 "Kindly note that I will be coming tomorrow.",
-                "I would be glad to attend tomorrow as planned."
+                "I would be glad to attend tomorrow as planned.",
+                "Thank you for checking in; I confirm I will be there tomorrow."
               ];
               break;
             case 'make_professional':
@@ -1679,7 +1777,8 @@ Return JSON with format:
               alts = [
                 "Please be advised that I will attend tomorrow as scheduled.",
                 "I am writing to confirm my attendance for tomorrow.",
-                "Kindly note my confirmed availability for tomorrow."
+                "Kindly note my confirmed availability for tomorrow.",
+                "My scheduled attendance for tomorrow is confirmed."
               ];
               break;
             case 'make_friendly':
@@ -1687,14 +1786,16 @@ Return JSON with format:
               alts = [
                 "I'll be there tomorrow! Looking forward to it.",
                 "See you tomorrow!",
-                "Confirmed, see you there tomorrow!"
+                "Confirmed, see you there tomorrow!",
+                "Count me in for tomorrow!"
               ];
               break;
             case 'make_formal':
               rewritten = "I hereby confirm my scheduled arrival for tomorrow.";
               alts = [
                 "I hereby confirm my scheduled arrival for tomorrow.",
-                "Please accept this as formal confirmation of my attendance."
+                "Please accept this as formal confirmation of my attendance.",
+                "This serves as official confirmation of my presence tomorrow."
               ];
               break;
             case 'make_shorter':
@@ -1703,7 +1804,8 @@ Return JSON with format:
               alts = [
                 "I will come tomorrow.",
                 "Confirmed for tomorrow.",
-                "Will attend tomorrow."
+                "Will attend tomorrow.",
+                "There tomorrow."
               ];
               break;
           }
@@ -1713,27 +1815,31 @@ Return JSON with format:
               rewritten = "I am currently heading to the office and will connect with you shortly.";
               alts = [
                 "I am currently heading to the office and will connect with you shortly.",
-                "Kindly note I am on my way to the office."
+                "Kindly note I am on my way to the office.",
+                "I am en route to the office and will follow up upon arrival."
               ];
               break;
             case 'make_professional':
               rewritten = "Please be advised that I am en route to the office and will be available shortly.";
               alts = [
                 "Please be advised that I am en route to the office and will be available shortly.",
-                "I am traveling to the office and will follow up upon arrival."
+                "I am traveling to the office and will follow up upon arrival.",
+                "Currently in transit to the office; available via email shortly."
               ];
               break;
             case 'make_friendly':
               rewritten = "Heading to the office now, see you soon!";
               alts = [
                 "Heading to the office now, see you soon!",
-                "On my way to work!"
+                "On my way to work!",
+                "Headed in now, catch you there!"
               ];
               break;
             case 'make_formal':
               rewritten = "I am currently in transit to the office and shall follow up upon arrival.";
               alts = [
-                "I am currently in transit to the office and shall follow up upon arrival."
+                "I am currently in transit to the office and shall follow up upon arrival.",
+                "Kindly note my transit to the office location at this hour."
               ];
               break;
             case 'make_shorter':
@@ -1741,7 +1847,8 @@ Return JSON with format:
               rewritten = "On my way to the office.";
               alts = [
                 "On my way to the office.",
-                "Heading to office."
+                "Heading to office.",
+                "En route to office."
               ];
               break;
           }
@@ -1751,28 +1858,45 @@ Return JSON with format:
               rewritten = `I would like to kindly let you know that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`;
               alts = [
                 rewritten,
-                `Please note that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}. Thank you!`
+                `Please note that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}. Thank you!`,
+                `I would appreciate it if you could note that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`,
+                `Kindly be advised that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`
               ];
               break;
             case 'make_professional':
               rewritten = `Please be advised that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`;
               alts = [
                 rewritten,
-                `I am writing to confirm that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`
+                `I am writing to confirm that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`,
+                `Kindly note the confirmed details: ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`,
+                `This is to confirm that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`
               ];
               break;
             case 'make_friendly':
               rewritten = cleanS;
-              alts = [cleanS, `Just wanted to let you know: ${cleanS}`];
+              alts = [
+                cleanS,
+                `Hey, just wanted to let you know: ${cleanS}!`,
+                `Just a quick update: ${cleanS}!`,
+                `Quick heads-up from my end: ${cleanS}.`
+              ];
               break;
             case 'make_formal':
               rewritten = `I hereby note that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`;
-              alts = [rewritten, `Kindly be informed that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`];
+              alts = [
+                rewritten,
+                `Kindly be informed that ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`,
+                `Please accept this official communication regarding ${cleanS.charAt(0).toLowerCase() + cleanS.slice(1)}.`
+              ];
               break;
             case 'make_shorter':
             default:
               rewritten = cleanGrammar;
-              alts = [cleanGrammar];
+              alts = [
+                cleanGrammar,
+                cleanS,
+                cleanS.endsWith('.') ? cleanS : `${cleanS}.`
+              ];
               break;
           }
         }
@@ -1854,6 +1978,17 @@ Return JSON with format:
     if (/i will coming/i.test(corrected)) {
       corrected = corrected.replace(/i will coming/gi, 'I will come');
       corrections.push({ original: 'will coming', corrected: 'will come', explanation: 'Use base verb after modal verb "will".', type: 'grammar' });
+    }
+    // Rule 1B: 'me i go' / 'me go' -> 'May I go?'
+    if (/^(?:me i go|me go|can me go)\b/i.test(corrected)) {
+      corrected = 'May I go?';
+      corrections.push({ original: text, corrected: 'May I go?', explanation: 'Use polite modal auxiliary "May I go?".', type: 'restructuring' });
+      return {
+        originalText: text,
+        correctedText: 'May I go?',
+        naturalPhrasing: 'May I please leave now?',
+        corrections
+      };
     }
     // Rule 2: 'what you doing' / 'what u doing' / 'what are u doing' -> 'What are you doing'
     if (/what (?:you|u) doing/i.test(corrected)) {
