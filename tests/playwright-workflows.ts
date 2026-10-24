@@ -89,6 +89,81 @@ async function runAllPlaywrightTests() {
     await page.screenshot({ path: path.join(screenshotsDir, '03_reply_inserted_in_box.png') });
 
     // -----------------------------------------------------------------
+    // STEP 2B: Selected Message Filter Modes (Polite, Professional, Casual, Short)
+    // -----------------------------------------------------------------
+    console.log('\n--- Step 2B: Testing Selected Message Filter Modes ---');
+    // Click bubble again to reopen intelligence panel
+    await comingBubble.scrollIntoViewIfNeeded();
+    await comingBubble.click();
+    await page.waitForTimeout(600);
+
+    // 1. Test Polite Filter (#reply-filter-polite)
+    console.log('Testing #reply-filter-polite...');
+    const politeFilterBtn = page.locator('#reply-filter-polite');
+    await politeFilterBtn.scrollIntoViewIfNeeded();
+    await politeFilterBtn.click();
+    await page.waitForTimeout(1000);
+    const politeAns = page.locator('text=Yes, I will certainly be present tomorrow. Thank you for inviting me!').first();
+    const politeAnsVisible = await politeAns.isVisible();
+    record('Selected Message Filter: Polite Tone Generates Courteous Answer', politeAnsVisible);
+
+    // 2. Test Professional Filter (#reply-filter-professional)
+    console.log('Testing #reply-filter-professional...');
+    const profFilterBtn = page.locator('#reply-filter-professional');
+    await profFilterBtn.scrollIntoViewIfNeeded();
+    await profFilterBtn.click();
+    await page.waitForTimeout(1000);
+    const profAns = page.locator('text=Confirmed. I will attend as scheduled tomorrow.').first();
+    const profAnsVisible = await profAns.isVisible();
+    record('Selected Message Filter: Professional Tone Generates Formal Answer', profAnsVisible);
+
+    // 3. Test Casual Filter (#reply-filter-casual)
+    console.log('Testing #reply-filter-casual...');
+    const casualFilterBtn = page.locator('#reply-filter-casual');
+    await casualFilterBtn.scrollIntoViewIfNeeded();
+    await casualFilterBtn.click();
+    await page.waitForTimeout(1000);
+    const casualAns = page.locator('text=Yes, definitely coming tomorrow! See you there!').first();
+    const casualAnsVisible = await casualAns.isVisible();
+    record('Selected Message Filter: Casual Tone Generates Friendly Answer', casualAnsVisible);
+
+    // 4. Test Short Filter (#reply-filter-short)
+    console.log('Testing #reply-filter-short...');
+    const shortFilterBtn = page.locator('#reply-filter-short');
+    await shortFilterBtn.scrollIntoViewIfNeeded();
+    await shortFilterBtn.click();
+    await page.waitForTimeout(1000);
+    const shortAns = page.locator('text=Yes, I\'ll be there tomorrow.').first();
+    const shortAnsVisible = await shortAns.isVisible();
+    record('Selected Message Filter: Short Tone Generates Concise Answer', shortAnsVisible);
+
+    // Test Done Button with Short Filter option
+    if (shortAnsVisible) {
+      await shortAns.click();
+      await page.waitForTimeout(300);
+      await doneBtn.scrollIntoViewIfNeeded();
+      await doneBtn.click();
+      await page.waitForTimeout(500);
+      const shortVal = await inputField.inputValue();
+      record('Short Filtered Reply Inserted via Done Button', shortVal.includes('Yes, I\'ll be there tomorrow'), `Value: "${shortVal}"`);
+    }
+
+    // Reset back to All Tracks for standard tests
+    const allFilterBtn = page.locator('#reply-filter-all');
+    await allFilterBtn.scrollIntoViewIfNeeded();
+    await allFilterBtn.click();
+    await page.waitForTimeout(600);
+
+    // Dismiss panel before clicking another message
+    const closeBtn = page.locator('#close-selected-msg-btn');
+    if (await closeBtn.isVisible()) {
+      await closeBtn.click();
+      await page.waitForTimeout(400);
+    }
+
+    await page.screenshot({ path: path.join(screenshotsDir, '03b_filter_modes_tested.png') });
+
+    // -----------------------------------------------------------------
     // STEP 3: Meeting Message Selection ("today we have a meeting at 5 o'clock")
     // -----------------------------------------------------------------
     console.log('\n--- Step 3: Testing "today we have a meeting at 5 o\'clock" ---');
@@ -112,6 +187,12 @@ async function runAllPlaywrightTests() {
     }
 
     await page.screenshot({ path: path.join(screenshotsDir, '04_meeting_reply_inserted.png') });
+
+    // Close intelligence panel to prepare for typing test
+    if (await closeBtn.isVisible()) {
+      await closeBtn.click();
+      await page.waitForTimeout(400);
+    }
 
     // -----------------------------------------------------------------
     // STEP 4: Hinglish Typing & Real-time Auto-Translate Preview
@@ -140,26 +221,33 @@ async function runAllPlaywrightTests() {
     const politeCard = page.locator('div:has-text("Could you please let me know what you are currently doing?")').last();
     let politeVisible = await politeCard.isVisible();
     if (!politeVisible) {
-      await wordToneBtn.click();
-      await page.waitForTimeout(1000);
+      const politeTab = page.locator('#word-tone-polite');
+      if (await politeTab.isVisible()) {
+        await politeTab.click();
+        await page.waitForTimeout(1200);
+      } else {
+        await wordToneBtn.click();
+        await page.waitForTimeout(1200);
+      }
       politeVisible = await politeCard.isVisible();
     }
     record('Word Tone: Polite Filter Generated', politeVisible);
 
-    // Test Professional Tab inside floating deck: button:has-text("👔 Professional")
+    // Test Professional Tab inside floating deck: #word-tone-professional
     console.log('Switching to Professional Tone tab inside deck...');
-    const profTab = page.locator('button:has-text("👔 Professional")').first();
+    const profTab = page.locator('#word-tone-professional');
     await profTab.click();
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1200);
     const profCard = page.locator('div:has-text("Could you please provide an update on your current progress?")').last();
     const profVisible = await profCard.isVisible();
     record('Word Tone: Professional Filter Generated', profVisible);
 
-    // Test Casual Tab inside floating deck: button:has-text("😎 Casual")
+    // Test Casual Tab inside floating deck: #word-tone-casual
     console.log('Switching to Casual Tone tab inside deck...');
-    const casualTab = page.locator('button:has-text("😎 Casual")').first();
+    const casualTab = page.locator('#word-tone-casual');
+    await casualTab.scrollIntoViewIfNeeded();
     await casualTab.click();
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1600);
     const casualCard = page.locator('div:has-text("What are you up to right now?")').last();
     const casualVisible = await casualCard.isVisible();
     record('Word Tone: Casual Filter Generated', casualVisible);
@@ -168,7 +256,14 @@ async function runAllPlaywrightTests() {
 
     // Click casual variation card to replace input text
     console.log('Clicking Casual card to replace in box...');
-    if (casualVisible) {
+    const varCard0 = page.locator('#tone-variation-card-0');
+    if (await varCard0.isVisible()) {
+      await varCard0.click();
+      await page.waitForTimeout(500);
+      const casualInputVal = await inputField.inputValue();
+      const casualReplaced = casualInputVal.includes('What are you up to right now');
+      record('Word Tone: One-tap Replace Text in Box', casualReplaced, `Value: "${casualInputVal}"`);
+    } else if (casualVisible) {
       await casualCard.click();
       await page.waitForTimeout(500);
       const casualInputVal = await inputField.inputValue();
@@ -189,7 +284,7 @@ async function runAllPlaywrightTests() {
 
     // Tap the Hindi Smart Reply pill under "Smart Reply Language (जवाब की भाषा)"
     console.log('Selecting Hindi Smart Reply pill...');
-    const hiReplyPill = page.locator('button:has-text("🇮🇳 हिन्दी")').last();
+    const hiReplyPill = page.locator('#smart-reply-lang-hi');
     await hiReplyPill.scrollIntoViewIfNeeded();
     await hiReplyPill.click();
     await page.waitForTimeout(1500);
@@ -215,7 +310,7 @@ async function runAllPlaywrightTests() {
 
     // Switch to Gujarati Smart Reply pill
     console.log('Selecting Gujarati Smart Reply pill...');
-    const guReplyPill = page.locator('button:has-text("🇮🇳 ગુજરાતી")').last();
+    const guReplyPill = page.locator('#smart-reply-lang-gu');
     await guReplyPill.scrollIntoViewIfNeeded();
     await guReplyPill.click();
     await page.waitForTimeout(1500);

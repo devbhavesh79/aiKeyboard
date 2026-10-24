@@ -833,6 +833,7 @@ Return JSON with format:
   ): ReplyResponse {
     const lower = incoming.toLowerCase();
     const draftLower = (draft || '').toLowerCase();
+    const activeTone = (tone || 'all').toLowerCase();
     const isQuestion = lower.includes('?') || lower.startsWith('are you') || lower.startsWith('can you') || lower.startsWith('will you') || lower.startsWith('do you') || lower.startsWith('is ') || lower.startsWith('kya') || lower.includes('hoga kya');
     const isComing = lower.includes('coming') || lower.includes('aa rahe') || lower.includes('aaoge') || lower.includes('aoge') || lower.includes('attend') || lower.includes('join us') || lower.includes('come tomorrow') || lower.includes('reach');
     const isMeeting = lower.includes('meet') || lower.includes('5 o') || lower.includes('5 pm') || lower.includes('10 am') || lower.includes('baje') || lower.includes('available') || lower.includes('schedule') || lower.includes('time');
@@ -844,208 +845,677 @@ Return JSON with format:
 
     let suggestions: any[] = [];
 
+    // Helper to format suggestions
+    const formatSugg = (texts: string[], tones: string[], lengths: string[]) => [
+      { id: 'rep-1', text: texts[0], tone: tones[0] || activeTone, lengthTag: lengths[0] || 'short', confidence: 0.98 },
+      { id: 'rep-2', text: texts[1], tone: tones[1] || activeTone, lengthTag: lengths[1] || 'medium', confidence: 0.96 },
+      { id: 'rep-3', text: texts[2], tone: tones[2] || activeTone, lengthTag: lengths[2] || 'detailed', confidence: 0.94 }
+    ];
+
     if (targetLanguage === 'hi') {
       if (isDeparture) {
-        suggestions = [
-          { id: 'rep-1', text: "मैं अभी प्रस्थान कर रहा हूँ और शीघ्र ही आपसे संपर्क करूँगा।", tone: 'professional', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "मैं अभी निकल रहा हूँ; यदि कोई आवश्यक कार्य हो तो कृपया बताएं।", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-          { id: 'rep-3', text: "आज के लिए मेरा कार्य समाप्त हुआ, मैं अभी प्रस्थान कर रहा हूँ।", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-        ];
+        suggestions = formatSugg(
+          ["मैं अभी प्रस्थान कर रहा हूँ और शीघ्र ही आपसे संपर्क करूँगा।", "मैं अभी निकल रहा हूँ; यदि कोई आवश्यक कार्य हो तो कृपया बताएं।", "आज के लिए मेरा कार्य समाप्त हुआ, मैं अभी प्रस्थान कर रहा हूँ।"],
+          ['professional', 'friendly', 'formal'],
+          ['short', 'medium', 'detailed']
+        );
       } else if (isComing) {
-        suggestions = [
-          { id: 'rep-1', text: "हाँ, मैं कल निश्चित रूप से आऊँगा। धन्यवाद!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "क्षमा करें, पूर्व व्यस्तता के कारण मैं कल उपस्थित नहीं हो पाऊँगा।", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-          { id: 'rep-3', text: "मैं अभी पूरी तरह सुनिश्चित नहीं हूँ; अपना समय देखकर आपको शीघ्र बताता हूँ।", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-        ];
-      } else if (isMeeting) {
-        if (isKitneBaje) {
-          suggestions = [
-            { id: 'rep-1', text: "कल की बैठक सुबह 10:30 बजे निर्धारित की गई है।", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-            { id: 'rep-2', text: "मैं समय की पुष्टि करके आपको शीघ्र सूचित कर दूंगा।", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-            { id: 'rep-3', text: "कृपया अद्यतन समय के लिए अपने कैलेंडर आमंत्रण की जाँच करें।", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-          ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["जी हाँ, मैं कल सादर उपस्थित रहूँगा। आमंत्रण के लिए धन्यवाद!", "पूछने के लिए बहुत धन्यवाद, किंतु पूर्व निर्धारित कार्य के कारण कल आना संभव नहीं होगा।", "सादर अनुरोध है कि मुझे थोड़ा समय दें, मैं अपनी व्यस्तता देखकर पुष्टि करूँगा।"],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["मैं कल निर्धारित समयानुसार अपनी उपस्थिति की पुष्टि करता हूँ।", "पूर्वनियोजित आधिकारिक व्यस्तता के कारण कल उपस्थित होने में असमर्थ हूँ।", "मैं अपने दैनिक कार्यक्रम की समीक्षा करके शीघ्र ही अपनी उपलब्धता सूचित करूँगा।"],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["हाँ बिल्कुल, कल पक्का आ रहा हूँ!", "यार कल थोड़ा मुश्किल है, नहीं आ पाऊँगा।", "अभी पक्का नहीं पता, थोड़ी देर में बताता हूँ!"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["हाँ, कल आऊँगा।", "कल नहीं आ पाऊँगा।", "थोड़ी देर में बताता हूँ।"],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
         } else {
-          suggestions = [
-            { id: 'rep-1', text: "हाँ, मैं निश्चित रूप से 5 बजे मीटिंग में शामिल होऊंगा। धन्यवाद!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-            { id: 'rep-2', text: "अपडेट के लिए धन्यवाद। कृपया मीटिंग का लिंक या एजेंडा साझा कर दीजिए।", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-            { id: 'rep-3', text: "सूचना के लिए धन्यवाद। उस समय मेरी पूर्व व्यस्तता है; क्या हम थोड़ा पहले या बाद का समय तय कर सकते हैं?", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-          ];
+          // All tracks (Yes / No / Check)
+          suggestions = formatSugg(
+            ["हाँ, मैं कल निश्चित रूप से आऊँगा। धन्यवाद!", "क्षमा करें, पूर्व व्यस्तता के कारण मैं कल उपस्थित नहीं हो पाऊँगा।", "मैं अभी पूरी तरह सुनिश्चित नहीं हूँ; अपना समय देखकर आपको शीघ्र बताता हूँ।"],
+            ['polite', 'friendly', 'formal'],
+            ['short', 'medium', 'detailed']
+          );
+        }
+      } else if (isMeeting) {
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["मैं निश्चित रूप से 5 बजे मीटिंग में सादर शामिल होऊंगा। धन्यवाद!", "समय साझा करने के लिए धन्यवाद। क्या हम थोड़ा पहले या बाद का समय तय कर सकते हैं?", "अपडेट के लिए बहुत-बहुत धन्यवाद। कृपया मीटिंग का लिंक साझा करने की कृपा करें।"],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["बैठक की पुष्टि की जाती है। मैं निर्धारित समय पर उपस्थित रहूँगा।", "उस समय पूर्व निर्धारित आधिकारिक कार्य है; कृपया बैठक को पुनर्निर्धारित करें।", "जानकारी प्राप्त हुई। कृपया कार्यसूची और बैठक का लिंक प्रेषित करें।"],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["समझ गया, 5 बजे मिलते हैं!", "5 बजे थोड़ा मुश्किल है, थोड़ा बाद में कर सकते हैं?", "मीटिंग का लिंक भेज दो प्लीज!"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["5 बजे मिलेंगे।", "समय बदलना होगा।", "लिंक भेजें।"],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["हाँ, मैं निश्चित रूप से 5 बजे मीटिंग में शामिल होऊंगा। धन्यवाद!", "सूचना के लिए धन्यवाद। उस समय मेरी पूर्व व्यस्तता है; क्या हम थोड़ा पहले या बाद का समय तय कर सकते हैं?", "अपडेट के लिए धन्यवाद। कृपया मीटिंग का लिंक या एजेंडा साझा कर दीजिए।"],
+            ['polite', 'formal', 'friendly'],
+            ['short', 'detailed', 'medium']
+          );
         }
       } else if (isStatus) {
-        suggestions = [
-          { id: 'rep-1', text: "मैं बहुत अच्छा हूँ, धन्यवाद! बस आज के कार्यों में व्यस्त हूँ। आप कैसे हैं?", tone: 'polite', lengthTag: 'medium', confidence: 0.98 },
-          { id: 'rep-2', text: "यहाँ सब ठीक है! अभी कुछ आवश्यक कार्य पूरे कर रहा हूँ।", tone: 'friendly', lengthTag: 'short', confidence: 0.96 },
-          { id: 'rep-3', text: "मैं ठीक हूँ, पूछने के लिए धन्यवाद! यदि कोई कार्य हो तो कृपया बताएं।", tone: 'formal', lengthTag: 'short', confidence: 0.93 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["मैं बहुत अच्छा हूँ, धन्यवाद! बस आज के कार्यों में व्यस्त हूँ। आप कैसे हैं?", "यहाँ सब कुशल मंगल है, पूछने के लिए बहुत धन्यवाद!", "मैं ठीक हूँ! यदि किसी भी कार्य में मेरी सहायता चाहिए तो कृपया बताएं।"],
+            ['polite', 'polite', 'polite'],
+            ['medium', 'short', 'short']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["वर्तमान में आज के निर्धारित कार्यों पर प्रगति कर रहा हूँ।", "दैनिक लक्ष्यों को पूरा करने में व्यस्त हूँ, शीघ्र संपर्क करूँगा।", "उपलब्ध हूँ। कृपया बताएं कि किस कार्य में सहायता अपेक्षित है।"],
+            ['professional', 'professional', 'professional'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["सब बढ़िया! बस काम निपटा रहा हूँ, तुम बताओ?", "बस चल रहा है यार, थोड़ा काम कर रहा हूँ।", "एकदम फर्स्ट क्लास! कोई काम हो तो बोल।"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["मैं बहुत अच्छा हूँ, धन्यवाद! बस आज के कार्यों में व्यस्त हूँ। आप कैसे हैं?", "यहाँ सब ठीक है! अभी कुछ आवश्यक कार्य पूरे कर रहा हूँ।", "मैं ठीक हूँ, पूछने के लिए धन्यवाद! यदि कोई कार्य हो तो कृपया बताएं।"],
+            ['polite', 'friendly', 'formal'],
+            ['medium', 'short', 'short']
+          );
+        }
       } else if (isReport) {
-        suggestions = [
-          { id: 'rep-1', text: "जी हाँ, मैं शीघ्र ही रिपोर्ट सादर प्रेषित कर दूंगा। धन्यवाद!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "ज़रूर! मैं अभी डेटा को अंतिम रूप दे रहा हूँ और जल्द ही साझा करूँगा।", tone: 'friendly', lengthTag: 'medium', confidence: 0.95 },
-          { id: 'rep-3', text: "समझ गया। मैं समीक्षा पूर्ण करके समय पर रिपोर्ट प्रेषित कर दूँगा।", tone: 'formal', lengthTag: 'detailed', confidence: 0.93 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["जी हाँ, मैं शीघ्र ही पूरी रिपोर्ट सादर प्रेषित कर दूंगा। धन्यवाद!", "मैं अंतिम विवरण जांच रहा हूँ और जल्द ही साझा करूँगा।", "कृपया थोड़ा समय दें, मैं समीक्षा पूर्ण करके समय पर रिपोर्ट प्रेषित कर दूँगा।"],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["अनुरोधित रिपोर्ट तैयार है और शीघ्र प्रेषित की जा रही है।", "डेटा का सत्यापन चल रहा है; आगामी एक घंटे में रिपोर्ट साझा कर दी जाएगी।", "स्वीकृत। अंतिम समीक्षा के उपरांत रिपोर्ट प्रेषित कर दी जाएगी।"],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["हाँ भाई, बस थोड़ी देर में फाइल भेज रहा हूँ!", "बस फाइनल कर रहा हूँ, 5 मिनट में देता हूँ।", "फाइल रेडी है, अभी शेयर करता हूँ!"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["जी हाँ, मैं शीघ्र ही रिपोर्ट सादर प्रेषित कर दूंगा। धन्यवाद!", "ज़रूर! मैं अभी डेटा को अंतिम रूप दे रहा हूँ और जल्द ही साझा करूँगा।", "समझ गया। मैं समीक्षा पूर्ण करके समय पर रिपोर्ट प्रेषित कर दूँगा।"],
+            ['polite', 'friendly', 'formal'],
+            ['short', 'medium', 'detailed']
+          );
+        }
       } else if (isThanks) {
-        suggestions = [
-          { id: 'rep-1', text: "आपका हार्दिक स्वागत है! आपकी सहायता करके प्रसन्नता हुई।", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "प्रसन्नता हुई कि मैं सहायता कर सका। आपका दिन शुभ हो!", tone: 'friendly', lengthTag: 'short', confidence: 0.95 },
-          { id: 'rep-3', text: "कृपया निसंकोच बताएं यदि आपको किसी अन्य सहायता की आवश्यकता हो।", tone: 'formal', lengthTag: 'medium', confidence: 0.93 }
-        ];
+        suggestions = formatSugg(
+          ["आपका हार्दिक स्वागत है! आपकी सहायता करके प्रसन्नता हुई।", "प्रसन्नता हुई कि मैं सहायता कर सका। आपका दिन शुभ हो!", "कृपया निसंकोच बताएं यदि आपको किसी अन्य सहायता की आवश्यकता हो।"],
+          ['polite', 'friendly', 'formal'],
+          ['short', 'short', 'medium']
+        );
       } else if (isQuestion) {
-        suggestions = [
-          { id: 'rep-1', text: "हाँ, बिल्कुल! मैं इसे अवश्य संभाल लूँगा। धन्यवाद!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "क्षमा करें, अभी मेरे लिए यह संभव नहीं है, लेकिन मैं बाद में देख सकता हूँ।", tone: 'professional', lengthTag: 'medium', confidence: 0.95 },
-          { id: 'rep-3', text: "कृपया थोड़े और विवरण साझा करेंगे ताकि मैं पुष्टि कर सकूँ?", tone: 'formal', lengthTag: 'medium', confidence: 0.93 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["हाँ, बिल्कुल! मैं इसमें आपकी पूरी सहायता करूँगा। धन्यवाद!", "सादर क्षमा चाहता हूँ, अभी मेरे लिए यह संभव नहीं होगा।", "कृपया थोड़े और विवरण साझा करने की कृपा करें ताकि मैं पुष्टि कर सकूँ।"],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'medium']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["स्वीकृत। मैं इस कार्य को प्राथमिकता के साथ पूरा करूँगा।", "पूर्वनियोजित व्यस्तता के कारण वर्तमान में यह अनुरोध स्वीकार करना संभव नहीं है।", "कृपया अधिक विवरण प्रदान करें ताकि आवश्यक कदम उठाए जा सकें।"],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'medium']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["हाँ बिल्कुल! मैं देख लेता हूँ इसे।", "सॉरी यार, अभी थोड़ा मुश्किल है!", "थोड़ा और बताओ क्या करना है?"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["हाँ, मैं कर लूँगा।", "अभी संभव नहीं है।", "विवरण भेजें।"],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["हाँ, बिल्कुल! मैं इसे अवश्य संभाल लूँगा। धन्यवाद!", "क्षमा करें, अभी मेरे लिए यह संभव नहीं है, लेकिन मैं बाद में देख सकता हूँ।", "कृपया थोड़े और विवरण साझा करेंगे ताकि मैं पुष्टि कर सकूँ?"],
+            ['polite', 'professional', 'formal'],
+            ['short', 'medium', 'medium']
+          );
+        }
       } else {
-        suggestions = [
-          { id: 'rep-1', text: "संदेश के लिए बहुत-बहुत धन्यवाद। मैंने विवरण नोट कर लिया है और शीघ्र सूचित करूँगा।", tone: 'polite', lengthTag: 'medium', confidence: 0.96 },
-          { id: 'rep-2', text: "समझ गया। मैं इस पर तुरंत कार्य आरंभ कर रहा हूँ और अद्यतन रखूँगा।", tone: 'professional', lengthTag: 'short', confidence: 0.94 },
-          { id: 'rep-3', text: "सूचना के लिए धन्यवाद। यदि कोई अन्य आवश्यकता हो तो कृपया बताएं।", tone: 'friendly', lengthTag: 'short', confidence: 0.92 }
-        ];
+        // General statement
+        suggestions = formatSugg(
+          ["संदेश के लिए बहुत-बहुत धन्यवाद। मैंने विवरण नोट कर लिया है और शीघ्र सूचित करूँगा।", "समझ गया। मैं इस पर तुरंत कार्य आरंभ कर रहा हूँ और अद्यतन रखूँगा।", "सूचना के लिए धन्यवाद। यदि कोई अन्य आवश्यकता हो तो कृपया बताएं।"],
+          ['polite', 'professional', 'friendly'],
+          ['medium', 'short', 'short']
+        );
       }
     } else if (targetLanguage === 'gu') {
       if (isComing) {
-        suggestions = [
-          { id: 'rep-1', text: "હા, હું આવતીકાલે ચોક્કસ આવીશ. આભાર!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "માફ કરશો, પહેલાના કામના લીધે હું આવતીકાલે નહીં આવી શકું.", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-          { id: 'rep-3', text: "હું હજુ પૂરી રીતે ખાતરીપૂર્વક કહી શકતો નથી; હું મારું શેડ્યૂલ તપાસીને થોડીવારમાં જણાવું છું.", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["હા, હું આવતીકાલે સાદર ઉપસ્થિત રહીશ. બોલાવવા બદલ આભાર!", "પૂછવા બદલ આભાર, પરંતુ અગાઉના કામને લીધે આવતીકાલે આવવું શક્ય નથી.", "નમ્ર વિનંતી છે કે મને થોડો સમય આપો, હું મારું શેડ્યૂલ જોઈને ખાતરી કરીશ."],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["હું આવતીકાલે નિર્ધારિત સમયે મારી હાજરીની પુષ્ટિ કરું છું.", "પહેલાથી નક્કી થયેલા કામને લીધે આવતીકાલે ઉપસ્થિત રહેવા અસમર્થ છું.", "હું મારા કાર્યક્રમની સમીક્ષા કરીને ટૂંક સમયમાં મારી ઉપલબ્ધતા જણાવીશ."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["હા ચોક્કસ, કાલે પાક્કો આવીશ!", "યાર કાલે નહીં ફાવે, બીજે જવાનું છે.", "હજુ નક્કી નથી, થોડીવારમાં જણાવું!"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["હા, કાલે આવીશ.", "કાલે નહીં આવી શકું.", "થોડીવારમાં જણાવું છું."],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["હા, હું આવતીકાલે ચોક્કસ આવીશ. આભાર!", "માફ કરશો, પહેલાના કામના લીધે હું આવતીકાલે નહીં આવી શકું.", "હું હજુ પૂરી રીતે ખાતરીપૂર્વક કહી શકતો નથી; હું મારું શેડ્યૂલ તપાસીને થોડીવારમાં જણાવું છું."],
+            ['polite', 'friendly', 'formal'],
+            ['short', 'medium', 'detailed']
+          );
+        }
       } else if (isMeeting) {
-        suggestions = [
-          { id: 'rep-1', text: "હા, હું 5 વાગ્યે મીટિંગમાં ચોક્કસ જોડાઈશ. આભાર!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "અપડેટ માટે આભાર. કૃપા કરીને મીટિંગ લિંક અથવા એજન્ડા શેર કરશો.", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-          { id: 'rep-3', text: "જણાવવા બદલ આભાર. તે સમયે મારું બીજું કામ છે; શું આપણે સમય બદલી શકીએ?", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["હું 5 વાગ્યે મીટિંગમાં સાદર જોડાઈશ. આભાર!", "સમય જણાવવા બદલ આભાર. શું આપણે થોડો વહેલો કે મોડો સમય રાખી શકીએ?", "અપડેટ માટે આભાર. કૃપા કરીને મીટિંગ લિંક આપશો."],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["મીટિંગની પુષ્ટિ કરું છું. હું સમયસર જોડાઈશ.", "તે સમયે બીજી વ્યસ્તતા છે; કૃપા કરીને વૈકલ્પિક સમય સૂચવશો.", "નોંધ લેવાઈ. કૃપા કરીને એજન્ડા અને લિંક મોકલશો."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["બરાબર, 5 વાગ્યે મળીએ!", "5 વાગ્યે મેળ નહીં પડે, થોડું મોડું ચાલશે?", "મીટિંગ લિંક મોકલી દેજે!"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["5 વાગ્યે જોડાઈશ.", "સમય બદલવો પડશે.", "લિંક મોકલો."],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["હા, હું 5 વાગ્યે મીટિંગમાં ચોક્કસ જોડાઈશ. આભાર!", "જણાવવા બદલ આભાર. તે સમયે મારું બીજું કામ છે; શું આપણે સમય બદલી શકીએ?", "અપડેટ માટે આભાર. કૃપા કરીને મીટિંગ લિંક અથવા એજન્ડા શેર કરશો."],
+            ['polite', 'formal', 'friendly'],
+            ['short', 'detailed', 'medium']
+          );
+        }
       } else if (isQuestion) {
-        suggestions = [
-          { id: 'rep-1', text: "હા, ચોક્કસ! હું આ કામ સંભાળી લઈશ. આભાર!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "માફ કરશો, અત્યારે આ શક્ય નથી, પરંતુ હું પછીથી મદદ કરી શકું છું.", tone: 'professional', lengthTag: 'medium', confidence: 0.95 },
-          { id: 'rep-3', text: "કૃપા કરીને થોડી વધુ વિગતો આપશો જેથી હું ખાતરી કરી શકું?", tone: 'formal', lengthTag: 'medium', confidence: 0.93 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["હા, ચોક્કસ! હું આમાં આપની સંપૂર્ણ મદદ કરીશ. આભાર!", "નમ્ર ક્ષમા ચાહું છું, હાલ મારા માટે આ શક્ય નહીં બને.", "કૃપા કરીને વધુ વિગતો આપશો જેથી હું ખાતરી કરી શકું."],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'medium']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["સ્વીકૃત. હું આ કાર્યને પ્રાથમિકતા આપી પૂર્ણ કરીશ.", "પૂર્વનિર્ધારિત કામના લીધે હાલ આ વિનંતી સ્વીકારવી શક્ય નથી.", "વિગતવાર માહિતી આપવા વિનંતી જેથી આગળનું પગલું લઈ શકાય."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'medium']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["હા પાક્કું! હું જોઈ લઉં છું.", "સૉરી યાર, અત્યારે નહીં ફાવે!", "શું કરવાનું છે થોડું સમજાવ ને?"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["હા, સંભાળી લઈશ.", "અત્યારે શક્ય નથી.", "વિગતો મોકલો."],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["હા, ચોક્કસ! હું આ કામ સંભાળી લઈશ. આભાર!", "માફ કરશો, અત્યારે આ શક્ય નથી, પરંતુ હું પછીથી મદદ કરી શકું છું.", "કૃપા કરીને થોડી વધુ વિગતો આપશો જેથી હું ખાતરી કરી શકું?"],
+            ['polite', 'professional', 'formal'],
+            ['short', 'medium', 'medium']
+          );
+        }
       } else {
-        suggestions = [
-          { id: 'rep-1', text: "જણાવવા બદલ આભાર. મેં આ નોંધી લીધું છે અને તમને ટૂંક સમયમાં જણાવીશ.", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "સમજી ગયો! હું આ કામ પર તરત જ આગળ વધી રહ્યો છું.", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-          { id: 'rep-3', text: "માહિતી માટે આભાર. જો અન્ય કોઈ જરૂર હોય તો કૃપા કરીને જણાવશો.", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-        ];
+        suggestions = formatSugg(
+          ["જણાવવા બદલ આભાર. મેં આ નોંધી લીધું છે અને તમને ટૂંક સમયમાં જણાવીશ.", "સમજી ગયો! હું આ કામ પર તરત જ આગળ વધી રહ્યો છું.", "માહિતી માટે આભાર. જો અન્ય કોઈ જરૂર હોય તો કૃપા કરીને જણાવશો."],
+          ['polite', 'friendly', 'formal'],
+          ['short', 'medium', 'detailed']
+        );
       }
     } else if (targetLanguage === 'mr') {
       if (isComing) {
-        suggestions = [
-          { id: 'rep-1', text: "होय, मी उद्या नक्की येईन. धन्यवाद!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "क्षमस्व, पूर्वनियोजित कामामुळे मला उद्या उपस्थित राहणे शक्य होणार नाही.", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-          { id: 'rep-3', text: "मी अजून पूर्णपणे सांगू शकत नाही; माझे वेळापत्रक तपासून थोड्याच वेळात कळवतो.", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["होय, मी उद्या नक्की उपस्थित राहीन. विचारल्याबद्दल धन्यवाद!", "विचारल्याबद्दल मनापासून धन्यवाद, परंतु आधीच्या कामामुळे उद्या येणे शक्य होणार नाही.", "कृपया थोडा वेळ द्यावा, मी माझे वेळापत्रक तपासून निश्चित कळवतो."],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["मी उद्या वेळेवर उपस्थित राहण्याची खात्री देतो.", "पूर्वनियोजित कामामुळे उद्या उपस्थित राहणे शक्य होणार नाही.", "मी वेळापत्रक तपासून लवकरच उपलब्धतेची माहिती देईन."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["हो नक्की, उद्या येतोच!", "सॉरी यार, उद्या नाही जमणार.", "अजून नक्की नाही, थोड्या वेळाने सांगतो."],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["होय, मी उद्या नक्की येईन. धन्यवाद!", "क्षमस्व, पूर्वनियोजित कामामुळे मला उद्या उपस्थित राहणे शक्य होणार नाही.", "मी अजून पूर्णपणे सांगू शकत नाही; माझे वेळापत्रक तपासून थोड्याच वेळात कळवतो."],
+            ['polite', 'friendly', 'formal'],
+            ['short', 'medium', 'detailed']
+          );
+        }
       } else if (isMeeting) {
-        suggestions = [
-          { id: 'rep-1', text: "होय, मी 5 वाजता मीटिंगला नक्की उपस्थित राहीन. धन्यवाद!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "अपडेटबद्दल धन्यवाद. कृपया मीटिंगची लिंक किंवा अजेंडा शेअर करा.", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-          { id: 'rep-3', text: "माहिती दिल्याबद्दल धन्यवाद. त्या वेळी माझी व्यस्तता आहे; आपण वेळ बदलू शकतो का?", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["मी 5 वाजता मीटिंगला सादर उपस्थित राहीन. धन्यवाद!", "वेळ सांगितल्याबद्दल धन्यवाद. आपण वेळ थोडी पुढे किंवा मागे करू शकतो का?", "अपडेटबद्दल धन्यवाद. कृपया मीटिंगची लिंक पाठवावी."],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["मी बैठकीची पुष्टी करतो. मी वेळेवर उपस्थित राहीन.", "त्या वेळी आधीचे अधिकृत काम आहे; कृपया बैठक पुढे ढकलावी.", "नोंद घेतली. कृपया बैठकीचा अजेंडा आणि लिंक पाठवावी."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["समजलं, 5 वाजता भेटू!", "5 वाजता थोडं कठीण आहे, नंतर चालेल का?", "मीटिंगची लिंक पाठव ना प्लीज!"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["5 वाजता उपस्थित राहीन.", "वेळ बदलावी लागेल.", "लिंक पाठवा."],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["होय, मी 5 वाजता मीटिंगला नक्की उपस्थित राहीन. धन्यवाद!", "माहिती दिल्याबद्दल धन्यवाद. त्या वेळी माझी व्यस्तता आहे; आपण वेळ बदलू शकतो का?", "अपडेटबद्दल धन्यवाद. कृपया मीटिंगची लिंक किंवा अजेंडा शेअर करा."],
+            ['polite', 'formal', 'friendly'],
+            ['short', 'detailed', 'medium']
+          );
+        }
       } else if (isQuestion) {
-        suggestions = [
-          { id: 'rep-1', text: "होय, नक्कीच! मी हे पूर्ण करेन. धन्यवाद!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "क्षमस्व, सध्या हे शक्य होणार नाही, पण नंतर मी मदत करू शकेन.", tone: 'professional', lengthTag: 'medium', confidence: 0.95 },
-          { id: 'rep-3', text: "कृपया अधिक माहिती द्याल का, जेणेकरून मी खात्री करू शकेन?", tone: 'formal', lengthTag: 'medium', confidence: 0.93 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["होय, नक्कीच! मी यात आपली पूर्ण मदत करेन. धन्यवाद!", "सादर क्षमस्व, सध्या माझ्यासाठी हे शक्य होणार नाही.", "कृपया अधिक तपशील द्यावेत जेणेकरून मी पुष्टी करू शकेन."],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'medium']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["स्वीकृत. मी या कामाला प्राधान्य देऊन पूर्ण करेन.", "पूर्वनियोजित व्यस्ततेमुळे सध्या ही विनंती स्वीकारणे शक्य नाही.", "कृपया तपशील प्रदान करावेत जेणेकरून पुढील कारवाई करता येईल."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'medium']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["हो नक्की! मी बघतो हे.", "सॉरी यार, आत्ता जमणार नाही!", "काय करायचंय जरा सांग ना?"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["होय, सांभाळून घेईन.", "आत्ता शक्य नाही.", "तपशील पाठवा."],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["होय, नक्कीच! मी हे पूर्ण करेन. धन्यवाद!", "क्षमस्व, सध्या हे शक्य होणार नाही, पण नंतर मी मदत करू शकेन.", "कृपया अधिक माहिती द्याल का, जेणेकरून मी खात्री करू शकेन?"],
+            ['polite', 'professional', 'formal'],
+            ['short', 'medium', 'medium']
+          );
+        }
       } else {
-        suggestions = [
-          { id: 'rep-1', text: "माहिती दिल्याबद्दल धन्यवाद. मी हे नोंदवून घेतले आहे आणि लवकरच कळवतो.", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "समजले! मी यावर लगेच काम सुरू करत आहे.", tone: 'friendly', lengthTag: 'medium', confidence: 0.95 },
-          { id: 'rep-3', text: "धन्यवाद. आणखी काही सहाय्य हवे असल्यास कृपया सांगा.", tone: 'formal', lengthTag: 'detailed', confidence: 0.93 }
-        ];
+        suggestions = formatSugg(
+          ["माहिती दिल्याबद्दल धन्यवाद. मी हे नोंदवून घेतले आहे आणि लवकरच कळवतो.", "समजले! मी यावर लगेच काम सुरू करत आहे.", "धन्यवाद. आणखी काही सहाय्य हवे असल्यास कृपया सांगा."],
+          ['polite', 'friendly', 'formal'],
+          ['short', 'medium', 'detailed']
+        );
       }
     } else if (targetLanguage === 'hinglish') {
       if (isComing) {
-        suggestions = [
-          { id: 'rep-1', text: "Haan bilkul, main kal zaroor aaunga. Thank you!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "Sorry, kal mera pehle se plan hai toh main nahi aa paunga.", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-          { id: 'rep-3', text: "Main abhi sure nahi hoon, schedule check karke thodi der me batata hoon.", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-        ];
-      } else if (isMeeting) {
-        if (isKitneBaje) {
-          suggestions = [
-            { id: 'rep-1', text: "Kal ki meeting subah 10:30 baje schedule ki gayi hai.", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-            { id: 'rep-2', text: "Main time confirm karke aapko thodi der me batata hoon.", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-            { id: 'rep-3', text: "Please ek baar calendar invite check kar lijiye time ke liye.", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-          ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["Ji haan, main kal zaroor present rahunga. Pouchne ke liye thank you!", "Thank you for asking, but prior commitment ki wajah se kal aana possible nahi hoga.", "Please thoda time dijiye, main calendar dekh kar confirm karta hoon."],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["I confirm my attendance for tomorrow as scheduled.", "Regretfully, prior official commitment ki wajah se main kal join nahi kar paunga.", "Main schedule review karke availability shortly update karta hoon."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["Haan pakka, kal aa raha hoon!", "Yaar kal thoda mushkil hai, nahi aa paunga.", "Abhi pakka nahi pata, thodi der me batata hoon!"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["Haan, kal aaunga.", "Kal nahi aa paunga.", "Thodi der me batata hoon."],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
         } else {
-          suggestions = [
-            { id: 'rep-1', text: "Haan bilkul, main 5 baje meeting join karunga. Thank you!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-            { id: 'rep-2', text: "Thanks for the update! Please meeting link share kar dijiye.", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-            { id: 'rep-3', text: "Thanks for informing! Us time meri prior commitment hai, kya hum reschedule kar sakte hain?", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-          ];
+          suggestions = formatSugg(
+            ["Haan bilkul, main kal zaroor aaunga. Thank you!", "Sorry, kal mera pehle se plan hai toh main nahi aa paunga.", "Main abhi sure nahi hoon, schedule check karke thodi der me batata hoon."],
+            ['polite', 'friendly', 'formal'],
+            ['short', 'medium', 'detailed']
+          );
+        }
+      } else if (isMeeting) {
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["Sure, main definitely 5 baje meeting join karunga. Thank you!", "Thanks for informing! Us time meri prior commitment hai, kya hum reschedule kar sakte hain?", "Thanks for the update! Please meeting link share kar dijiye."],
+            ['polite', 'polite', 'polite'],
+            ['short', 'detailed', 'medium']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["Confirmed. I will join the 5:00 PM meeting promptly.", "I have a prior scheduling conflict at 5 PM. Could we propose an alternate slot?", "Meeting acknowledged. Please share the agenda and invite link."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["Got it, 5 baje milte hain!", "5 baje thoda tight hai, thoda late kar sakte hain?", "Meeting link bhej dena please!"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["Haan bilkul, main 5 baje meeting join karunga. Thank you!", "Thanks for informing! Us time meri prior commitment hai, kya hum reschedule kar sakte hain?", "Thanks for the update! Please meeting link share kar dijiye."],
+            ['polite', 'formal', 'friendly'],
+            ['short', 'detailed', 'medium']
+          );
         }
       } else if (isStatus) {
-        suggestions = [
-          { id: 'rep-1', text: "Main badhiya hoon, thank you! Bas kaam kar raha tha. Aap batao kaise ho?", tone: 'polite', lengthTag: 'medium', confidence: 0.98 },
-          { id: 'rep-2', text: "Sab theek hai, abhi kuch zaroori kaam nipta raha tha.", tone: 'friendly', lengthTag: 'short', confidence: 0.96 },
-          { id: 'rep-3', text: "Main theek hoon! Koi help chahiye ho toh zaroor batana.", tone: 'formal', lengthTag: 'short', confidence: 0.93 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["Main badhiya hoon, thank you kindly! Aap batao aap kaise ho?", "Sab theek chal raha hai yahan, poochne ke liye thank you!", "Main theek hoon, agar koi assistance chahiye ho toh zaroor batayein."],
+            ['polite', 'polite', 'polite'],
+            ['medium', 'short', 'short']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["Aaj ke scheduled deliverables par progress ho rahi hai.", "Currently important tasks me busy hoon, shortly connect karta hoon.", "Available hoon. Please batao kya support required hai."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["Sab mast! Bas thoda kaam nipta raha hoon, tu bata?", "Bas chal raha hai yaar, tu suna!", "Ekdum badhiya! Koi kaam ho toh bol."],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["Sab theek hai.", "Thoda busy hoon.", "Kuch der me batata hoon."],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["Main badhiya hoon, thank you! Bas kaam kar raha tha. Aap batao kaise ho?", "Sab theek hai, abhi kuch zaroori kaam nipta raha tha.", "Main theek hoon! Koi help chahiye ho toh zaroor batana."],
+            ['polite', 'friendly', 'formal'],
+            ['medium', 'short', 'short']
+          );
+        }
       } else if (isQuestion) {
-        suggestions = [
-          { id: 'rep-1', text: "Haan bilkul! Main isko dekh leta hoon. Thank you!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "Sorry, abhi possible nahi ho payega, thodi der baad dekh sakte hain.", tone: 'professional', lengthTag: 'medium', confidence: 0.95 },
-          { id: 'rep-3', text: "Kya aap thoda aur detail share kar sakte hain taaki main confirm kar saku?", tone: 'formal', lengthTag: 'medium', confidence: 0.93 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["Haan bilkul! Main definitely isme assist karunga. Thank you!", "Regretfully, abhi mere liye possible nahi ho payega.", "Please thode aur details share kar dijiye taaki main confirm kar sakoon."],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'medium']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["Confirmed. Main is task ko priority par complete karunga.", "Prior commitment ki wajah se abhi ye request accept karna possible nahi hai.", "Please detailed specifications share karein action lene ke liye."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'medium']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["Haan bilkul! Main sambhal leta hoon.", "Sorry yaar, abhi thoda mushkil hai!", "Thoda aur bata kya karna hai?"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["Haan, main kar lunga.", "Abhi possible nahi hai.", "Details bhej do."],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["Haan bilkul! Main isko dekh leta hoon. Thank you!", "Sorry, abhi possible nahi ho payega, thodi der baad dekh sakte hain.", "Kya aap thoda aur detail share kar sakte hain taaki main confirm kar saku?"],
+            ['polite', 'professional', 'formal'],
+            ['short', 'medium', 'medium']
+          );
+        }
       } else {
-        suggestions = [
-          { id: 'rep-1', text: "Haan, main thodi der me check karke update karta hoon. Thank you!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "Sure! Main details review karke jaldi revert karta hoon.", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-          { id: 'rep-3', text: "Samajh gaya. Main ispe kaam kar raha hoon aur update dunga.", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-        ];
+        suggestions = formatSugg(
+          ["Haan, main thodi der me check karke update karta hoon. Thank you!", "Sure! Main details review karke jaldi revert karta hoon.", "Samajh gaya. Main ispe kaam kar raha hoon aur update dunga."],
+          ['polite', 'friendly', 'formal'],
+          ['short', 'medium', 'detailed']
+        );
       }
     } else {
       // English (Fluent, Natural & Polite by Default)
       if (isComing) {
-        suggestions = [
-          { id: 'rep-1', text: "Yes, I will definitely be there tomorrow. Looking forward to it!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "I am sorry, but I won't be able to make it tomorrow due to a prior commitment.", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-          { id: 'rep-3', text: "I am not completely sure yet; let me check my schedule and confirm shortly.", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-        ];
-      } else if (isMeeting) {
-        if (isKitneBaje) {
-          suggestions = [
-            { id: 'rep-1', text: "The meeting is scheduled for 10:30 AM tomorrow. Looking forward to connecting!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-            { id: 'rep-2', text: "Let me confirm the exact meeting time and update you in a few minutes.", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-            { id: 'rep-3', text: "Could you please check your calendar invite for the updated meeting time?", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-          ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["Yes, I will certainly be present tomorrow. Thank you for inviting me!", "I truly appreciate you asking, but regretfully I will not be able to attend tomorrow.", "Could you kindly allow me a moment to verify my schedule and confirm with you?"],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["Confirmed. I will attend as scheduled tomorrow.", "Regretfully, I have a prior business commitment tomorrow and will be unable to attend.", "I am currently reviewing my commitments and will confirm my availability shortly."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["Yes, definitely coming tomorrow! See you there!", "Sorry, won't be able to make it tomorrow, got caught up!", "Not 100% sure yet, will let you know in a bit!"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["Yes, I'll be there tomorrow.", "Can't make it tomorrow, sorry.", "Will check and confirm shortly."],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
         } else {
-          suggestions = [
-            { id: 'rep-1', text: "Sure, I will definitely join the meeting on time. Thank you!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-            { id: 'rep-2', text: "Thank you for the update. Could you please share the meeting link or agenda?", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-            { id: 'rep-3', text: "Thank you for informing me. I have a prior commitment at that time; could we connect slightly earlier or later?", tone: 'formal', lengthTag: 'detailed', confidence: 0.94 }
-          ];
+          suggestions = formatSugg(
+            ["Yes, I will definitely be there tomorrow. Looking forward to it!", "I am sorry, but I won't be able to make it tomorrow due to a prior commitment.", "I am not completely sure yet; let me check my schedule and confirm shortly."],
+            ['polite', 'friendly', 'formal'],
+            ['short', 'medium', 'detailed']
+          );
+        }
+      } else if (isMeeting) {
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["I would be glad to participate in the meeting on time. Thank you!", "Thank you for informing me. Would it be possible to adjust the timing slightly if needed?", "Could you kindly share the meeting link or agenda at your convenience?"],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["Confirmed. I will join the meeting promptly as scheduled.", "I have an existing scheduling conflict at that time; may we propose an alternate slot?", "Meeting acknowledged. Please distribute the agenda and access link."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["Got it, see you at the meeting!", "A bit tight for me at that time, can we do a little later?", "Could you drop the meeting link here please?"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["Confirmed, will join.", "Need to reschedule.", "Please send link."],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["Sure, I will definitely join the meeting on time. Thank you!", "Thank you for informing me. I have a prior commitment at that time; could we connect slightly earlier or later?", "Thank you for the update. Could you please share the meeting link or agenda?"],
+            ['polite', 'formal', 'friendly'],
+            ['short', 'detailed', 'medium']
+          );
         }
       } else if (isStatus) {
-        suggestions = [
-          { id: 'rep-1', text: "I am doing well, thank you! Just working through today's tasks. How about you?", tone: 'polite', lengthTag: 'medium', confidence: 0.98 },
-          { id: 'rep-2', text: "All good here! Just wrapping up some important work right now.", tone: 'friendly', lengthTag: 'short', confidence: 0.96 },
-          { id: 'rep-3', text: "I'm good, thanks for checking in! Please let me know if you need any assistance.", tone: 'formal', lengthTag: 'short', confidence: 0.93 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["I am doing well, thank you kindly! How are things with you today?", "Currently attending to today's tasks, thank you for checking in.", "I am well and available if you require any assistance. How may I help?"],
+            ['polite', 'polite', 'polite'],
+            ['medium', 'short', 'short']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["Progressing through today's deliverables according to schedule.", "Currently engaged in priority tasks; available for follow-ups shortly.", "Available to assist on current items. Please share requirements."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["All good here! Just wrapping up some tasks. What's up?", "Working on a few things right now. How are you doing?", "Doing great! Let me know what you need."],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["I am doing well, thank you! Just working through today's tasks. How about you?", "All good here! Just wrapping up some important work right now.", "I'm good, thanks for checking in! Please let me know if you need any assistance."],
+            ['polite', 'friendly', 'formal'],
+            ['medium', 'short', 'short']
+          );
+        }
       } else if (isReport) {
-        suggestions = [
-          { id: 'rep-1', text: "Yes, I will share the completed report shortly. Thank you!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "I am currently finalizing the review and will share it promptly.", tone: 'friendly', lengthTag: 'medium', confidence: 0.96 },
-          { id: 'rep-3', text: "I need a little more time to finalize it. May I share it by this evening?", tone: 'formal', lengthTag: 'detailed', confidence: 0.93 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["I will gladly send the report over as soon as final checks are completed.", "Could you please allow me a few more minutes to ensure full accuracy before sending?", "I will share the requested documentation shortly. Thank you for your patience."],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["The requested report is finalized and will be submitted shortly.", "Currently conducting quality verification; delivery expected within the hour.", "Acknowledged. Final report compilation is underway for transmission."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'detailed']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["Sure thing! Sending the report right across!", "Almost done with it, sharing in a couple of minutes!", "Just adding final touches, sending shortly!"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["Yes, I will share the completed report shortly. Thank you!", "I am currently finalizing the review and will share it promptly.", "I need a little more time to finalize it. May I share it by this evening?"],
+            ['polite', 'friendly', 'formal'],
+            ['short', 'medium', 'detailed']
+          );
+        }
       } else if (isThanks) {
-        suggestions = [
-          { id: 'rep-1', text: "You are most welcome! Always happy to help.", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "Glad I could be of assistance. Have a wonderful day!", tone: 'friendly', lengthTag: 'short', confidence: 0.96 },
-          { id: 'rep-3', text: "Anytime! Please let me know if you need anything else.", tone: 'formal', lengthTag: 'medium', confidence: 0.93 }
-        ];
+        suggestions = formatSugg(
+          ["You are most welcome! Always happy to help.", "Glad I could be of assistance. Have a wonderful day!", "Anytime! Please let me know if you need anything else."],
+          ['polite', 'friendly', 'formal'],
+          ['short', 'short', 'medium']
+        );
       } else if (isQuestion) {
-        suggestions = [
-          { id: 'rep-1', text: "Yes, absolutely! I will take care of this. Thank you!", tone: 'polite', lengthTag: 'short', confidence: 0.98 },
-          { id: 'rep-2', text: "Unfortunately, I will not be able to do this right now, but I can assist later.", tone: 'professional', lengthTag: 'medium', confidence: 0.95 },
-          { id: 'rep-3', text: "Could you please share a few more details so I can confirm?", tone: 'formal', lengthTag: 'medium', confidence: 0.93 }
-        ];
+        if (activeTone === 'polite') {
+          suggestions = formatSugg(
+            ["I would be more than happy to help with this. Thank you for asking!", "I would love to assist, but regretfully I will not be able to right now.", "Could you kindly share a few more details so I can confirm?"],
+            ['polite', 'polite', 'polite'],
+            ['short', 'medium', 'medium']
+          );
+        } else if (activeTone === 'professional') {
+          suggestions = formatSugg(
+            ["Affirmative, I will take responsibility for this action.", "Regretfully, I cannot accommodate this request at the present time.", "Please provide further specifications so I may assess feasibility."],
+            ['professional', 'professional', 'professional'],
+            ['short', 'medium', 'medium']
+          );
+        } else if (activeTone === 'casual' || activeTone === 'friendly') {
+          suggestions = formatSugg(
+            ["Yes, sure thing! I'm on it.", "Sorry, can't take care of this right now!", "Could you give me a bit more context on this?"],
+            ['friendly', 'friendly', 'friendly'],
+            ['short', 'short', 'short']
+          );
+        } else if (activeTone === 'short') {
+          suggestions = formatSugg(
+            ["Yes, I'll handle it.", "Cannot do this right now.", "Please share details."],
+            ['short', 'short', 'short'],
+            ['short', 'short', 'short']
+          );
+        } else {
+          suggestions = formatSugg(
+            ["Yes, absolutely! I will take care of this. Thank you!", "Unfortunately, I will not be able to do this right now, but I can assist later.", "Could you please share a few more details so I can confirm?"],
+            ['polite', 'professional', 'formal'],
+            ['short', 'medium', 'medium']
+          );
+        }
       } else {
-        suggestions = [
-          { id: 'rep-1', text: "Thank you for the update. I have noted this and will follow up accordingly.", tone: 'polite', lengthTag: 'medium', confidence: 0.97 },
-          { id: 'rep-2', text: "Understood! I will proceed with this right away and keep you informed.", tone: 'professional', lengthTag: 'short', confidence: 0.95 },
-          { id: 'rep-3', text: "Thank you for letting me know. Please let me know if any further action is needed.", tone: 'friendly', lengthTag: 'short', confidence: 0.92 }
-        ];
+        suggestions = formatSugg(
+          ["Thank you for the update. I have noted this and will follow up accordingly.", "Understood! I will proceed with this right away and keep you informed.", "Thank you for letting me know. Please let me know if any further action is needed."],
+          ['polite', 'professional', 'friendly'],
+          ['medium', 'short', 'short']
+        );
       }
     }
 
@@ -1058,7 +1528,7 @@ Return JSON with format:
 
   public offlineFallbackRewrite(text: string, action: string, targetLanguage: SupportedLanguage): RewriteResponse {
     const lower = text.toLowerCase().trim();
-    const isQuestion = lower.includes('what') || lower.includes('why') || lower.includes('how') || lower.includes('when') || lower.includes('where') || lower.includes('are you') || lower.includes('can you') || lower.includes('kya') || lower.includes('kaise') || lower.includes('kab') || lower.includes('kahan') || lower.includes('?') || lower.includes('doing');
+    const isQuestion = lower.includes('what') || lower.includes('why') || lower.includes('how') || lower.includes('when') || lower.includes('where') || lower.includes('are you') || lower.includes('can you') || lower.includes('kya') || lower.includes('kiya') || lower.includes('kaise') || lower.includes('kab') || lower.includes('kahan') || lower.includes('?') || lower.includes('doing');
     const isRequest = lower.includes('send') || lower.includes('give') || lower.includes('share') || lower.includes('provide') || lower.includes('call') || lower.includes('help') || lower.includes('bhej');
 
     let rewritten = text;
@@ -1066,7 +1536,7 @@ Return JSON with format:
 
     if (targetLanguage === 'en') {
       if (isQuestion) {
-        if (lower.includes('doing') || lower.includes('working') || lower.includes('activity')) {
+        if (lower.includes('doing') || lower.includes('working') || lower.includes('activity') || lower.includes('kar rah') || lower.includes('kiya kar') || lower.includes('kya kar') || lower.includes('kya chal')) {
           switch (action) {
             case 'make_polite':
               rewritten = "Could you please let me know what you are currently doing?";

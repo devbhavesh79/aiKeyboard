@@ -131,6 +131,7 @@ export default function App() {
   // Selected Message Question Lang & Reply Language Override (User Requirement: answers default to question language with options)
   const [replyLangChoice, setReplyLangChoice] = useState<SupportedLanguage | 'auto'>('auto');
   const [questionDetectedLang, setQuestionDetectedLang] = useState<SupportedLanguage>('en');
+  const [selectedReplyToneFilter, setSelectedReplyToneFilter] = useState<'all' | 'polite' | 'professional' | 'casual' | 'short'>('all');
 
   // ChatGPT AI Assistant Toolbar Card state
   const [chatgptSuggestions, setChatgptSuggestions] = useState<Array<{ id: string; text: string; tone: string; label: string }> | null>(null);
@@ -435,7 +436,8 @@ export default function App() {
   const handleSelectChatMessage = async (
     msg: ChatMessage, 
     customTarget?: SupportedLanguage, 
-    overrideReplyLang?: SupportedLanguage | 'auto'
+    overrideReplyLang?: SupportedLanguage | 'auto',
+    toneFilter?: 'all' | 'polite' | 'professional' | 'casual' | 'short'
   ) => {
     setSelectedMessage(msg);
     setIsSelectedLoading(true);
@@ -452,9 +454,15 @@ export default function App() {
     const activeReplyChoice = overrideReplyLang !== undefined ? overrideReplyLang : replyLangChoice;
     const effectiveReplyLang: SupportedLanguage = activeReplyChoice === 'auto' ? qLang : activeReplyChoice;
     
+    // 3. Determine Tone / Filter mode:
+    const activeTone = toneFilter !== undefined ? toneFilter : selectedReplyToneFilter;
+    if (toneFilter !== undefined) {
+      setSelectedReplyToneFilter(toneFilter);
+    }
+
     // Translation target: Default to Hindi ('hi') when question is English/other, or user's targetLang
     const activeTarget: SupportedLanguage = customTarget || (targetLang === 'en' && qLang === 'en' ? 'hi' : targetLang);
-    const msgCacheKey = `${msg.text.trim().toLowerCase()}_target_${activeTarget}_reply_${effectiveReplyLang}`;
+    const msgCacheKey = `${msg.text.trim().toLowerCase()}_target_${activeTarget}_reply_${effectiveReplyLang}_tone_${activeTone}`;
 
     // Check client cache first
     if (selectedMessageCache.current.has(msgCacheKey)) {
@@ -489,7 +497,7 @@ export default function App() {
           incomingMessage: msg.text,
           draftMessage: inputText,
           targetLanguage: effectiveReplyLang,
-          tone: 'polite'
+          tone: activeTone
         })
       }).then(r => r.json());
 
@@ -508,12 +516,22 @@ export default function App() {
 
       let repliesArr = null;
       if (replyData.success && replyData.data?.suggestions) {
-        const labels = ['Yes / Confirm (हाँ / स्वीकृति)', 'No / Alternative (नहीं / विकल्प)', 'Check / Clarify (पुष्टि / संशय)'];
+        let labels = ['Option 1: Yes / Confirm (हाँ / स्वीकृति)', 'Option 2: No / Alternative (नहीं / विकल्प)', 'Option 3: Check / Clarify (पुष्टि / संशय)'];
+        if (activeTone === 'polite') {
+          labels = ['Polite Option 1 (विनम्र विकल्प १)', 'Polite Option 2 (विनम्र विकल्प २)', 'Polite Option 3 (विनम्र विकल्प ३)'];
+        } else if (activeTone === 'professional') {
+          labels = ['Professional Option 1 (पेशेवर विकल्प १)', 'Professional Option 2 (पेशेवर विकल्प २)', 'Professional Option 3 (पेशेवर विकल्प ३)'];
+        } else if (activeTone === 'casual') {
+          labels = ['Casual Option 1 (दोस्ताना विकल्प १)', 'Casual Option 2 (दोस्ताना विकल्प २)', 'Casual Option 3 (दोस्ताना विकल्प ३)'];
+        } else if (activeTone === 'short') {
+          labels = ['Short Option 1 (संक्षिप्त विकल्प १)', 'Short Option 2 (संक्षिप्त विकल्प २)', 'Short Option 3 (संक्षिप्त विकल्प ३)'];
+        }
+
         repliesArr = replyData.data.suggestions.slice(0, 3).map((s: any, idx: number) => ({
           id: s.id || `rep-${idx}`,
           text: s.text,
-          tone: s.tone || 'polite',
-          label: labels[idx] || 'Polite Reply'
+          tone: s.tone || activeTone,
+          label: labels[idx] || 'Smart Reply'
         }));
         setSelectedMsgReplies(repliesArr);
         if (repliesArr.length > 0) {
@@ -556,7 +574,7 @@ export default function App() {
   const handleSwitchReplyLanguage = (choice: SupportedLanguage | 'auto') => {
     setReplyLangChoice(choice);
     if (selectedMessage) {
-      handleSelectChatMessage(selectedMessage, undefined, choice);
+      handleSelectChatMessage(selectedMessage, undefined, choice, selectedReplyToneFilter);
     }
   };
 
@@ -1966,6 +1984,7 @@ export default function App() {
                         <span className="text-xs font-bold text-white">Selected Message Intelligence</span>
                       </div>
                       <button
+                        id="close-selected-msg-btn"
                         onClick={() => {
                           setSelectedMessage(null);
                           setSelectedMsgTranslation(null);
@@ -1995,10 +2014,11 @@ export default function App() {
                           ].map(lang => (
                             <button
                               key={lang.code}
+                              id={`quotation-translate-${lang.code}`}
                               onClick={() => {
                                 handleSetDefaultLanguage(lang.code as SupportedLanguage);
                                 if (selectedMessage) {
-                                  handleSelectChatMessage(selectedMessage, lang.code as SupportedLanguage);
+                                  handleSelectChatMessage(selectedMessage, lang.code as SupportedLanguage, replyLangChoice, selectedReplyToneFilter);
                                 }
                               }}
                               className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
@@ -2028,6 +2048,7 @@ export default function App() {
                         <div className="flex items-center gap-1 flex-wrap">
                           {/* Option 1: Default Question Language */}
                           <button
+                            id="smart-reply-lang-auto"
                             onClick={() => handleSwitchReplyLanguage('auto')}
                             className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 ${
                               replyLangChoice === 'auto'
@@ -2050,6 +2071,7 @@ export default function App() {
                           ].map(lang => (
                             <button
                               key={lang.code}
+                              id={`smart-reply-lang-${lang.code}`}
                               onClick={() => handleSwitchReplyLanguage(lang.code as SupportedLanguage)}
                               className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
                                 replyLangChoice === lang.code
@@ -2106,6 +2128,39 @@ export default function App() {
                               </span>
                               <span className="text-[9px] text-emerald-400 font-medium">Select & tap Done</span>
                             </div>
+
+                            {/* Tone / Filter Mode Bar (Fulfills: "uska different tarike se answer de sakta he sare filter wise wo 100% accurate hona chahiye") */}
+                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                              {[
+                                { id: 'all', label: '✨ All Tracks', desc: 'हाँ/नहीं/पुष्टि' },
+                                { id: 'polite', label: '😊 Polite', desc: 'विनम्र' },
+                                { id: 'professional', label: '👔 Professional', desc: 'पेशेवर' },
+                                { id: 'casual', label: '😎 Casual', desc: 'दोस्ताना' },
+                                { id: 'short', label: '⚡ Short', desc: 'संक्षिप्त' },
+                              ].map((f) => {
+                                const isActive = selectedReplyToneFilter === f.id;
+                                return (
+                                  <button
+                                    key={f.id}
+                                    id={`reply-filter-${f.id}`}
+                                    onClick={() => {
+                                      if (selectedMessage) {
+                                        handleSelectChatMessage(selectedMessage, undefined, replyLangChoice, f.id as any);
+                                      }
+                                    }}
+                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap transition flex items-center gap-1 shadow-sm ${
+                                      isActive
+                                        ? 'bg-emerald-600 text-white ring-1 ring-emerald-400 font-bold'
+                                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                                    }`}
+                                  >
+                                    <span>{f.label}</span>
+                                    <span className="opacity-70 text-[9px]">({f.desc})</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
                             <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
                               {selectedMsgReplies.map((reply, idx) => {
                                 const isSelected = selectedReplyOptionId === reply.id;
@@ -2366,6 +2421,7 @@ export default function App() {
                     {/* Horizontal Tone Tabs matching screenshot */}
                     <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
                       <button
+                        id="word-tone-rewrite"
                         onClick={() => handleToneTabSelect('rewrite')}
                         className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition flex items-center gap-1 shadow-sm ${
                           activeToneTab === 'rewrite'
@@ -2377,6 +2433,7 @@ export default function App() {
                       </button>
 
                       <button
+                        id="word-tone-professional"
                         onClick={() => handleToneTabSelect('professional')}
                         className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition flex items-center gap-1 shadow-md ${
                           activeToneTab === 'professional'
@@ -2388,6 +2445,7 @@ export default function App() {
                       </button>
 
                       <button
+                        id="word-tone-casual"
                         onClick={() => handleToneTabSelect('casual')}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition flex items-center gap-1 shadow-sm ${
                           activeToneTab === 'casual'
@@ -2399,6 +2457,7 @@ export default function App() {
                       </button>
 
                       <button
+                        id="word-tone-polite"
                         onClick={() => handleToneTabSelect('polite')}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition flex items-center gap-1 shadow-sm ${
                           activeToneTab === 'polite'
@@ -2410,6 +2469,7 @@ export default function App() {
                       </button>
 
                       <button
+                        id="word-tone-formal"
                         onClick={() => handleToneTabSelect('formal')}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition flex items-center gap-1 shadow-sm ${
                           activeToneTab === 'formal'
@@ -2421,6 +2481,7 @@ export default function App() {
                       </button>
 
                       <button
+                        id="word-tone-short"
                         onClick={() => handleToneTabSelect('short')}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition flex items-center gap-1 shadow-sm ${
                           activeToneTab === 'short'
@@ -2444,6 +2505,7 @@ export default function App() {
                       {toneVariations.map((variation, idx) => (
                         <div
                           key={idx}
+                          id={`tone-variation-card-${idx}`}
                           onClick={() => handleApplyVariation(variation)}
                           className="p-3 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer transition shadow-sm group"
                         >
